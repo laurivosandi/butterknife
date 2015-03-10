@@ -1,0 +1,65 @@
+commit 54d48f7dc2bf57afa1fc3edc3ea683dbe59ae896
+Author: Lauri Võsandi <lauri.vosandi@gmail.com>
+Date:   Tue Mar 10 13:36:28 2015 +0000
+
+    Added ms-sys
+
+diff --git a/package/Config.in b/package/Config.in
+index 584887b..f2ae0d9 100644
+--- a/package/Config.in
++++ b/package/Config.in
+@@ -142,6 +142,7 @@ endif
+ endmenu
+ 
+ menu "Filesystem and flash utilities"
++	source "package/ms-sys/Config.in"
+ 	source "package/btrfs-progs/Config.in"
+ 	source "package/cifs-utils/Config.in"
+ 	source "package/cramfs/Config.in"
+diff --git a/package/ms-sys/Config.in b/package/ms-sys/Config.in
+new file mode 100644
+index 0000000..c2aca24
+--- /dev/null
++++ b/package/ms-sys/Config.in
+@@ -0,0 +1,7 @@
++config BR2_PACKAGE_MS_SYS
++	bool "ms-sys"
++	help
++	  This is a Linux program for writing Microsoft
++	  compatible boot records.
++
++	  http://ms-sys.sourceforge.net/
+diff --git a/package/ms-sys/ms-sys.hash b/package/ms-sys/ms-sys.hash
+new file mode 100644
+index 0000000..1eac1a6
+--- /dev/null
++++ b/package/ms-sys/ms-sys.hash
+@@ -0,0 +1 @@
++md5 d31e7ef3db6bd77dbb13df11057fa0f2 ms-sys-2.4.1.tar.gz
+diff --git a/package/ms-sys/ms-sys.mk b/package/ms-sys/ms-sys.mk
+new file mode 100644
+index 0000000..479725b
+--- /dev/null
++++ b/package/ms-sys/ms-sys.mk
+@@ -0,0 +1,21 @@
++################################################################################
++#
++# ms-sys
++#
++################################################################################
++
++MS_SYS_VERSION = 2.4.1
++MS_SYS_SOURCE = ms-sys-$(MS_SYS_VERSION).tar.gz
++MS_SYS_SITE =  http://downloads.sourceforge.net/ms-sys/
++MS_SYS_LICENSE = GPL
++MS_SYS_LICENSE_FILES = doc/COPYING
++
++define MS_SYS_BUILD_CMDS
++	$(MAKE) CC="$(TARGET_CC)" LD="$(TARGET_LD)" -C $(@D) all
++endef
++
++define MS_SYS_INSTALL_TARGET_CMDS
++	$(INSTALL) -D -m 0755 $(@D)/bin/ms-sys $(TARGET_DIR)/sbin/ms-sys
++endef
++
++$(eval $(generic-package))
