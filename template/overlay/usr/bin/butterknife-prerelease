@@ -1,0 +1,6 @@
+#!/bin/bash
+
+for script in /etc/butterknife/prerelease.d/*; do
+    echo "Executing $script"
+    $script
+done

@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "Disabling APT cron jobs"
+rm /etc/cron.daily/apt

@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "Rebuilding fontconfig cache..."
+fc-cache -r

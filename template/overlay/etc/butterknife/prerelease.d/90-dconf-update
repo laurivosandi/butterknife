@@ -1,0 +1,5 @@
+#!/bin/bash
+echo "Regenerating dconf databases"
+rm -fv /etc/dconf/db/mandatory
+dconf update
+

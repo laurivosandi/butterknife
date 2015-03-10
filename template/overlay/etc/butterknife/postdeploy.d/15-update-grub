@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "Updating GRUB menu entries"
+update-grub

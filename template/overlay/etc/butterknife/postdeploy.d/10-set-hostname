@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# TODO: Optional hostname + domain dialog in provisioning script
+
+HOSTNAME=$(echo host-$(cat /sys/class/net/eth0/address) | sed -e 's/://g')
+
+echo "Setting /etc/hostname to $HOSTNAME"
+echo $HOSTNAME > /etc/hostname
+
+echo "Substituting /etc/hosts"
+if [ -z "$BUTTERKNIFE_DOMAIN" ]; then
+    sed -i -e "s/127\.0\.1\.1.*$/127.0.1.1 $HOSTNAME/g" /etc/hosts
+else
+    sed -i -e "s/127\.0\.1\.1.*$/127.0.1.1 $HOSTNAME.$BUTTERKNIFE_DOMAIN $HOSTNAME/g" /etc/hosts
+fi

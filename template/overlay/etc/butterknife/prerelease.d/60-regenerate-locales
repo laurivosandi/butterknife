@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# Confirm by checking output of: locale -a
+locale-gen --purge

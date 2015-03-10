@@ -1,0 +1,7 @@
+Butterknife template helpers
+============================
+
+The files under overlay/ are intended to be added to a LXC container
+that you're using as template for deployment.
+We've put significant effort into making the post-deploy and pre-release scripts
+usable for as many as possible scenarios, but improvements are very much welcome.

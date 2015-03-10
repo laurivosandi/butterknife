@@ -1,0 +1,10 @@
+#!/bin/bash
+
+SUBVOL="@home"
+
+if [ ! -d "$BUTTERKNIFE_POOL_MOUNTPOINT/$SUBVOL" ]; then
+    echo "Creating subvolume $SUBVOL on $BUTTERKNIFE_POOL_MOUNTPOINT"
+    btrfs subvolume create "$BUTTERKNIFE_POOL_MOUNTPOINT/$SUBVOL"
+fi
+
+echo "UUID=$BUTTERKNIFE_POOL_UUID /home btrfs defaults,subvol=@home 0 5" >> /etc/fstab

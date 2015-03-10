@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "UUID=$BUTTERKNIFE_POOL_UUID / btrfs defaults,subvol=$BUTTERKNIFE_DEPLOY_SUBVOL 0 0" > /etc/fstab
+

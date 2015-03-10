@@ -1,0 +1,16 @@
+#!/bin/bash
+
+SUBVOL="@puppet-persistent-ssl-keys"
+
+if [ ! -d "$BUTTERKNIFE_POOL_MOUNTPOINT/$SUBVOL" ]; then
+    echo "Creating subvolume $SUBVOL on $BUTTERKNIFE_POOL_MOUNTPOINT"
+    btrfs subvolume create "$BUTTERKNIFE_POOL_MOUNTPOINT/$SUBVOL"
+fi
+
+echo "UUID=$BUTTERKNIFE_POOL_UUID /var/lib/puppet/ssl btrfs defaults,subvol=@puppet-persistent-ssl-keys 0 9" >> /etc/fstab
+
+# Create SSL keys for Puppet agent
+mount /var/lib/puppet/ssl
+puppet agent --enable
+#puppet agent --onetime --no-daemonize --verbose --waitforcert 5
+umount /var/lib/puppet/ssl

@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "Enabling GRUB menu"
+sed /etc/default/grub -i -e 's/GRUB_HIDDEN_TIMEOUT_QUIET=true/GRUB_HIDDEN_TIMEOUT_QUIET=false/'

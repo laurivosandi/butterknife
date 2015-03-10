@@ -1,0 +1,11 @@
+#!/bin/bash
+mountpoint /var/cache/apt/archives > /dev/null
+if [ $? -eq 0 ]; then
+    echo "APT package cache is mountpoint, not removing .deb files"
+else
+    echo "Cleaning up APT package cache"
+    rm -fv /var/cache/apt/archives/* /var/cache/apt/archives/partial/*
+fi
+
+echo "Cleaning APT package lists"
+rm -fv /var/cache/apt/*.bin
