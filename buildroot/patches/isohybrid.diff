@@ -1,9 +1,3 @@
-commit c674570df2011b18a18d204fb5e1262bc4984961
-Author: Lauri Võsandi <lauri.vosandi@gmail.com>
-Date:   Tue Mar 10 13:37:01 2015 +0000
-
-    Added isohybrid support
-
 diff --git a/fs/iso9660/Config.in b/fs/iso9660/Config.in
 index 50b4377..900dc43 100644
 --- a/fs/iso9660/Config.in
