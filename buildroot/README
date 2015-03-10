@@ -1,0 +1,27 @@
+Butterknife provisioning image
+==============================
+
+We're using Buildroot to generate all-in-one (<15MB) provisioning image
+which can be either booted via PXE or from a USB memory stick.
+
+Steps to reproduce the image:
+
+  git clone http://git.buildroot.net/git/buildroot.git
+  patch -p1 < ../path/to/buildroot/patches/*.diff
+
+To tweak the build:
+
+  make menuconfig
+  make linux-menuconfig
+  make busybox-menuconfig
+
+Make sure you:
+
+* Enable packages: jq pv fdisk btrfs-progs find dialog
+* Make sure you use fdisk from util-linux, not from busybox.
+* Make sure you enable support for necessary ethernet cards and SATA controllers 
+
+To compile the image run:
+
+  make
+
