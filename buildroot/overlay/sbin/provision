@@ -20,9 +20,9 @@ TARGET_MOUNTPOINT=/mnt/target
 
 # Clean up mess from interrupted snapshot retrieval
 if [ -f $POOL_TEMPLATES/dirty ]; then
-	echo "Interrupted snapshot cleanup not implemented yet!"
-	#for subvol in $(cat $POOL_TEMPLATES/dirty); do
-		# TODO: Handle these situations
+    echo "Interrupted snapshot cleanup not implemented yet!"
+    #for subvol in $(cat $POOL_TEMPLATES/dirty); do
+        # TODO: Handle these situations
     #done
 fi
 
@@ -53,20 +53,20 @@ set -e # Bail on error
 # Determine target disk
 for disk in /dev/sd?; do
     slug=$(echo $disk | cut -d "/" -f 3)
-	sector_count=$(cat /sys/block/$slug/size)
-	sector_size=$(cat /sys/block/$slug/queue/hw_sector_size)
+    sector_count=$(cat /sys/block/$slug/size)
+    sector_size=$(cat /sys/block/$slug/queue/hw_sector_size)
     # Hack around these dumbass cardreaders
     if [ "$sector_count" == "0" ]; then
         continue
     fi
-	size=$(($sector_count / 1000000 \* $sector_size / 1000))G
+    size=$(($sector_count / 1000000 \* $sector_size / 1000))G
     echo "$disk \"$(cat /sys/block/$slug/device/model | xargs) ($size)\"";
 done > /tmp/disks
 
 dialog \
-	--menu "Target disk" 0 0 0 \
-	--file /tmp/disks \
-	2> /tmp/selected_disk
+    --menu "Target disk" 0 0 0 \
+    --file /tmp/disks \
+    2> /tmp/selected_disk
 
 DISK=$(cat /tmp/selected_disk)
 DISK_SLUG=$(echo $DISK | cut -d "/" -f 3)
@@ -99,13 +99,13 @@ esac
 # Determine target partition
 for partition in $DISK?; do
     partition_slug=$(echo $partition | cut -d "/" -f 3)
-	sector_count=$(cat /sys/block/$DISK_SLUG/$partition_slug/size)
-	sector_size=$(cat /sys/block/$DISK_SLUG/queue/hw_sector_size)
-	size=$(($sector_count / 1000000 \* $sector_size / 1000000))G
+    sector_count=$(cat /sys/block/$DISK_SLUG/$partition_slug/size)
+    sector_size=$(cat /sys/block/$DISK_SLUG/queue/hw_sector_size)
+    size=$(($sector_count / 1000000 \* $sector_size / 1000000))G
     if [ $size == "0G" ]; then
-	    size=$(($sector_count / 1000 \* $sector_size / 1000))M
+        size=$(($sector_count / 1000 \* $sector_size / 1000))M
     fi
-	echo "$partition \"$size\"";
+    echo "$partition \"$size\"";
 done > /tmp/partitions
 
 dialog \
@@ -235,26 +235,26 @@ case $(cat /tmp/partitioning_method) in
 
         # Determine differential snapshot parents
         if [ -d $POOL_TEMPLATES/$TEMPLATE ]; then
-			cat /tmp/available_snapshots.json | jq -r '.snapshots[] .name' > /tmp/available_snapshot_names
-			ls $POOL_TEMPLATES/$TEMPLATE > /tmp/local_snapshot_names
+            cat /tmp/available_snapshots.json | jq -r '.snapshots[] .name' > /tmp/available_snapshot_names
+            ls $POOL_TEMPLATES/$TEMPLATE > /tmp/local_snapshot_names
             cat /tmp/local_snapshot_names /tmp/available_snapshot_names > /tmp/merged_snapshot_names
 
-    	    PARENTS=$(cat /tmp/merged_snapshot_names | sort | grep -v $SNAPSHOT | uniq -d)
-	        echo "Snapshot parents are: $PARENTS"
-    	    for parent in $PARENTS; do
-    	        STREAM="$STREAM$parent,"
-    	    done
-		else
-			echo "Differential update not possible, because no snapshot parents available locally. Falling back to full snapshot"
-		fi
+            PARENTS=$(cat /tmp/merged_snapshot_names | sort | grep -v $SNAPSHOT | uniq -d)
+            echo "Snapshot parents are: $PARENTS"
+            for parent in $PARENTS; do
+                STREAM="$STREAM$parent,"
+            done
+        else
+            echo "Differential update not possible, because no snapshot parents available locally. Falling back to full snapshot"
+        fi
 
         echo "Final URL is $STREAM"
 
         mkdir -p $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
 
-		# Mark dirty subvolumes
-		echo $TEMPLATE_SUBVOL > $POOL_TEMPLATES/dirty
-		sync
+        # Mark dirty subvolumes
+        echo $TEMPLATE_SUBVOL > $POOL_TEMPLATES/dirty
+        sync
 
         case $(cat /tmp/transfer_method) in
             multicast)
@@ -287,9 +287,9 @@ case $(cat /tmp/partitioning_method) in
             ;;
         esac
 
-		# Remove dirty flag
-		rm $POOL_TEMPLATES/dirty
-		sync
+        # Remove dirty flag
+        rm $POOL_TEMPLATES/dirty
+        sync
     ;;
 esac
 

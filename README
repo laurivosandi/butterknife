@@ -13,7 +13,7 @@ be used as snapshot server.
 Before doing any filesystem magic ensure that you're running 3.16+ kernel.
 You can install Ubuntu 14.10 kernel on 14.04 simply by doing following:
 
-	apt-get install linux-image-generic-lts-utopic
+    apt-get install linux-image-generic-lts-utopic
 
 
 The workflow
@@ -27,16 +27,16 @@ set up Ubuntu 14.04 container use:
 Use your favourite configuration management tool to customize the container,
 eg for Puppet users:
 
-	puppet apply /etc/puppet/manifests/site.pp
+    puppet apply /etc/puppet/manifests/site.pp
 
 Or just install and tweak whatever you need manually.
 To get a working Ubuntu 14.04 desktop install the corresponding metapackage,
 this of course contains a lot of useless stuff if you're planning to manage the
 image by yourself eg apport, update-notifier etc.
 
-	lxc-attach -n your-template
-	apt-get update
-	apt-get install ubuntu-desktop
+    lxc-attach -n your-template
+    apt-get update
+    apt-get install ubuntu-desktop
 
 Copy post-deploy, pre-release scripts and other helpers:
 
