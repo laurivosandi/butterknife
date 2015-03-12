@@ -6,14 +6,53 @@ which can be either booted via PXE or from a USB memory stick.
 
 Steps to reproduce the image:
 
-  git clone http://git.buildroot.net/git/buildroot.git
-  patch -p1 < ../path/to/buildroot/patches/*.diff
+    wget -c http://buildroot.uclibc.org/downloads/buildroot-2015.02.tar.bz2
+    tar xvjf buildroot-2015.02.tar.bz2
+    cd buildroot-2015.02
+    patch -p1 < path/to/butterknife/buildroot/patches/ms-sys.diff
+    patch -p1 < path/to/butterknife/buildroot/patches/isohybrid.diff
 
 To tweak the build:
 
-  make menuconfig
-  make linux-menuconfig
-  make busybox-menuconfig
+    make menuconfig
+    make linux-menuconfig
+    make busybox-menuconfig
+
+Enable:
+
+    Toolchain -> Enable WCHAR support
+    Toolchain -> Enable large file (files > 2 GB) support
+    Kernel
+        Linux Kernel
+            Kernel Version (Same as toolchain headers)
+            Kernel configuration (Using a custom config file) -> path/to/butterknife/buildroot/kernel.config
+    Filesystem and flash utilities ->
+        ms-sys
+        btrfs-progs
+        ntfs-3g
+    Development tools
+        jq
+    System tools 
+        util-linux
+            install utilities
+    Filesystem images
+        Compression method -> xz
+        initial RAM filesystem linked into linux kernel
+        iso image
+    Hardware handling
+        parted
+        pciutils
+    Libraries
+        Crypto
+            CA Certificates
+        Networking
+            libcurl
+                curl binary
+    Shell utilities
+        dialog
+    System configuration
+        Init system -> none
+        Root filesystem overlay directories -> path/to/butterknife/buildroot/overlay
 
 Make sure you:
 

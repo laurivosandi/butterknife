@@ -1,15 +1,13 @@
 #!/bin/sh
 
 # This script parses following arguments from /proc/cmdline:
-#   - butterknife_url=https://mgmt.koodur.com/api
-#   - butterknife_template=your-template
-#   - butterknife_snapshot=snap9
-#   - butterknife_domain=32kk.lan
+#   - bk_url=https://mgmt.koodur.com/api
+#   - bk_template=your-template
+#   - bk_snapshot=snap9
+#   - bk_domain=32kk.lan
 
 # TODO: Make sure fdisk from busybox is NOT used, it's counting sectors incorrectly (?!)
-# Dependencies: fdisk btrfs find dialog 
-
-URL="https://mgmt.koodur.com/api"
+# Dependencies: fdisk btrfs find dialog ntfs-3g ntfsprogs parted
 
 # TODO: Check connectivity with API server
 
@@ -50,7 +48,9 @@ done
 set +x # Don't echo
 set -e # Bail on error
 
-# Determine target disk
+#############################
+### Target disk selection ###
+#############################
 for disk in /dev/sd?; do
     slug=$(echo $disk | cut -d "/" -f 3)
     sector_count=$(cat /sys/block/$slug/size)
@@ -96,7 +96,9 @@ case $(cat /tmp/partitioning_method) in
     ;;
 esac
 
-# Determine target partition
+########################################
+### Target partition selection phase ###
+########################################
 for partition in $DISK?; do
     partition_slug=$(echo $partition | cut -d "/" -f 3)
     sector_count=$(cat /sys/block/$DISK_SLUG/$partition_slug/size)
@@ -158,6 +160,21 @@ case $(cat /tmp/partitioning_method) in
         echo "none" > /tmp/transfer_method
     ;;
 esac
+
+##############################
+### Server selection phase ###
+##############################
+if [ -z $URL ]; then
+    case $(cat /tmp/transfer_method) in
+        http|tee|proxy)
+            dialog --menu "Select server" 0 0 0 \
+                butterknife "Local server" \
+                mgmt.koodur.com "Koodur OÜ" >/tmp/server_hostname
+        ;;
+    esac
+fi
+
+URL="https://$(cat /tmp/server_hostname)/api"
 
 ################################
 ### Template selection phase ###
