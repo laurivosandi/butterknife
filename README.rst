@@ -4,6 +4,17 @@ Butterknife provisioning suite
 Butterknife makes Linux deployment dead-simple using the Btrfs filesystem
 and LXC containers.
 
+.. figure:: img/butterknife-multicast-usecase.png
+
+    Butterknife can be used to deploy hunders Linux workstations simultaneously
+
+Features
+--------
+
+* Deploy customized Ubuntu/Debian/Fedora workstation in 5 minutes
+* Deploy hundreds of machines simultanously within same timeframe
+* Perform incremental upgrades
+
 Installation
 ------------
 
