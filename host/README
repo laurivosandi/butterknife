@@ -1,0 +1,14 @@
+Butterknife provisioning server tools
+=====================================
+
+The overlay/ directory contains files intended to be installed on the machine
+that will be used to serve templates.
+
+Install dependencies:
+
+    sudo apt-get install python3-pip
+    sudo pip install falcon==0.2.0b1
+
+To start the Butterknife server:
+
+    sudo python3 /usr/share/butterknife/server/api.py
