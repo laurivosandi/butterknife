@@ -10,7 +10,6 @@
 # Dependencies: fdisk btrfs find dialog ntfs-3g ntfsprogs parted
 
 # TODO: Check connectivity with API server
-CURL=/usr/bin/curl --connect-timeout 5
 POOL_MOUNTPOINT=/mnt/pool
 POOL_TEMPLATES=$POOL_MOUNTPOINT/templates
 POOL_DEPLOYMENTS=$POOL_MOUNTPOINT/deployments
@@ -45,7 +44,7 @@ for chunk in $(cat /proc/cmdline); do
     esac
 done
 
-set +x # Don't echo
+set -x # Don't echo
 set -e # Bail on error
 
 #############################
@@ -189,7 +188,7 @@ if [ -z $TEMPLATE ]; then
         ;;
         *)
             # Fetch template list
-            $CURL -s $URL/container/ \
+            curl -s $URL/container/ \
                 | jq '.containers[] | .name + " \"" + .description + "\""' -r \
                 > /tmp/available_templates
         ;;
@@ -209,7 +208,7 @@ if [ -z $SNAPSHOT ]; then
     case $(cat /tmp/transfer_method) in
         http|tee|proxy|multicast)
             # Fetch snapshot list
-            $CURL -s $URL/container/$TEMPLATE/snapshot/ \
+            curl -s $URL/container/$TEMPLATE/snapshot/ \
                 > /tmp/available_snapshots.json        
 
             cat /tmp/available_snapshots.json \
@@ -280,7 +279,7 @@ case $(cat /tmp/partitioning_method) in
                     | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
             ;;
             http)
-                $CURL $STREAM \
+                curl $STREAM \
                     | zcat \
                     | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
             ;;
@@ -293,13 +292,13 @@ case $(cat /tmp/partitioning_method) in
                 sleep 1
                 udp-sender --nokbd --no-progress --min-receivers 1 --min-wait 5 /tmp/multicast_stream &
                 sleep 1
-                $CURL -s $STREAM | tee /tmp/multicast_stream > /tmp/local_stream
+                curl -s $STREAM | tee /tmp/multicast_stream > /tmp/local_stream
                 sleep 2
                 # TODO: Ensure btrfs receive has finished
             ;;
             proxy)
                 dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
-                $CURL -s $STREAM \
+                curl -s $STREAM \
                     | udp-sender --nokbd --min-receivers 1 --min-wait 5
             ;;
         esac
