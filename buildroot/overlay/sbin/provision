@@ -15,6 +15,8 @@ POOL_TEMPLATES=$POOL_MOUNTPOINT/templates
 POOL_DEPLOYMENTS=$POOL_MOUNTPOINT/deployments
 TARGET_MOUNTPOINT=/mnt/target
 
+AGENT="Butterknife-Provisioning-Image/0.1"
+
 # Clean up mess from interrupted snapshot retrieval
 if [ -f $POOL_TEMPLATES/dirty ]; then
     echo "Interrupted snapshot cleanup not implemented yet!"
@@ -208,7 +210,7 @@ if [ -z $TEMPLATE ]; then
         ;;
         *)
             # Fetch template list
-            curl -s $URL/container/ \
+            curl -A $AGENT -s $URL/container/ \
                 | jq '.containers[] | .name + " \"" + .description + "\""' -r \
                 > /tmp/available_templates
         ;;
@@ -228,7 +230,7 @@ if [ -z $SNAPSHOT ]; then
     case $(cat /tmp/transfer_method) in
         http|tee|proxy|multicast)
             # Fetch snapshot list
-            curl -s $URL/container/$TEMPLATE/snapshot/ \
+            curl -A $AGENT -s $URL/container/$TEMPLATE/snapshot/ \
                 > /tmp/available_snapshots.json        
 
             cat /tmp/available_snapshots.json \
@@ -299,7 +301,7 @@ case $(cat /tmp/partitioning_method) in
                     | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
             ;;
             http)
-                curl $STREAM \
+                curl -A $AGENT $STREAM \
                     | zcat \
                     | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
             ;;
@@ -312,13 +314,13 @@ case $(cat /tmp/partitioning_method) in
                 sleep 1
                 udp-sender --nokbd --no-progress --min-receivers 1 --min-wait 5 /tmp/multicast_stream &
                 sleep 1
-                curl -s $STREAM | tee /tmp/multicast_stream > /tmp/local_stream
+                curl -A $AGENT  -s $STREAM | tee /tmp/multicast_stream > /tmp/local_stream
                 sleep 2
                 # TODO: Ensure btrfs receive has finished
             ;;
             proxy)
                 dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
-                curl -s $STREAM \
+                curl -A $AGENT -s $STREAM \
                     | udp-sender --nokbd --min-receivers 1 --min-wait 5
             ;;
         esac
