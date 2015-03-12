@@ -11,14 +11,16 @@ and LXC containers.
 Features
 --------
 
-* Deploy customized Ubuntu/Debian/Fedora workstation in 5 minutes
+* Prepare template of your favourite Linux based OS using LXC
+* Deploy customized OS in 5 minutes
 * Deploy hundreds of machines simultanously within same timeframe
 * Perform incremental upgrades
+* Persistent Btrfs subvolumes for home folders, Puppet keys etc
 
 Installation
 ------------
 
-First set up machine with Ubuntu 14.04 LTS on top of btrfs filesystem to 
+First set up machine with Ubuntu 14.04 LTS on top of Btrfs filesystem to
 be used as snapshot server.
 
 Before doing any filesystem magic ensure that you're running 3.16+ kernel.

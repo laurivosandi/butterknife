@@ -4,6 +4,17 @@
 
 mount -t proc none /proc
 mount -t sysfs sysfs /sys
+
+#################################################################
+### There should be at least one network interface to proceed ###
+#################################################################
+
+if [ -z "$(ls /sys/class/net/ | grep -v '^lo$')" ]; then
+    dialog --msgbox "Butterknife was unable to detect any network interfaces,\
+        are you sure network interface is attached properly and we have drivers for it?" 0 0
+    exit 254
+fi
+
 udhcpc
 
 while [ 1 ]; do

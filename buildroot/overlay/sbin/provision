@@ -23,6 +23,19 @@ if [ -f $POOL_TEMPLATES/dirty ]; then
     #done
 fi
 
+#######################################
+### Check for presence of utilities ###
+#######################################
+for util in btrfs jq fdisk find ntfsresize; do
+    if [ -z "$(which $util)" ]; then
+        dialog --msgbox "Butterknife was unable to locate $util,\
+            are you sure the provisioning image was compiled properly?" 0 0
+        exit 253
+    else
+        echo "Found $util..."
+    fi
+done
+
 # These Bashisms are insane
 for chunk in $(cat /proc/cmdline); do
     case "$chunk" in
@@ -50,16 +63,24 @@ set -e # Bail on error
 #############################
 ### Target disk selection ###
 #############################
-for disk in /dev/sd?; do
-    slug=$(echo $disk | cut -d "/" -f 3)
-    sector_count=$(cat /sys/block/$slug/size)
-    sector_size=$(cat /sys/block/$slug/queue/hw_sector_size)
-    # Hack around these dumbass cardreaders
-    if [ "$sector_count" == "0" ]; then
-        continue
+if [ -z "$(ls /sys/class/block/" ]; then
+    dialog --msgbox "Butterknife was unable to detect any harddisks,\
+        are you sure harddisk is connected and we have drivers for it?" 0 0
+    exit 255
+fi
+
+for disk in /sys/class/block/*; do
+    if [ -d $disk/device ]; then
+        slug=$(basename $disk)
+        sector_count=$(cat $disk/size)
+        sector_size=$(cat $disk/queue/hw_sector_size)
+        # Hack around these dumbass cardreaders
+        if [ "$sector_count" == "0" ]; then
+            continue
+        fi
+        size=$(expr $sector_count / 1000000 \* $sector_size / 1000)G
+        echo "$slug \"$(cat $disk/device/model | xargs) ($size)\"";
     fi
-    size=$(($sector_count / 1000000 \* $sector_size / 1000))G
-    echo "$disk \"$(cat /sys/block/$slug/device/model | xargs) ($size)\"";
 done > /tmp/disks
 
 dialog \
@@ -67,8 +88,8 @@ dialog \
     --file /tmp/disks \
     2> /tmp/selected_disk
 
-DISK=$(cat /tmp/selected_disk)
-DISK_SLUG=$(echo $DISK | cut -d "/" -f 3)
+DISK_SLUG=$(cat /tmp/selected_disk)
+DISK=/dev/$DISK_SLUG
 
 dialog --menu "Partitioning $DISK" 0 0 0 \
     purge           "Overwrite whole disk" \
@@ -79,7 +100,6 @@ dialog --menu "Partitioning $DISK" 0 0 0 \
 
 # TODO: deploy          "Deploy received template" \
 # TODO: postinstall     "Run postinstall scripts (reinstall GRUB)" \
-
 
 # TODO: EFI way is not currently covered!
 case $(cat /tmp/partitioning_method) in
@@ -102,9 +122,9 @@ for partition in $DISK?; do
     partition_slug=$(echo $partition | cut -d "/" -f 3)
     sector_count=$(cat /sys/block/$DISK_SLUG/$partition_slug/size)
     sector_size=$(cat /sys/block/$DISK_SLUG/queue/hw_sector_size)
-    size=$(($sector_count / 1000000 \* $sector_size / 1000000))G
+    size=$(expr $sector_count / 1000000 \* $sector_size / 1000000)G
     if [ $size == "0G" ]; then
-        size=$(($sector_count / 1000 \* $sector_size / 1000))M
+        size=$(expr $sector_count / 1000 \* $sector_size / 1000)M
     fi
     echo "$partition \"$size\"";
 done > /tmp/partitions
