@@ -10,7 +10,7 @@
 # Dependencies: fdisk btrfs find dialog ntfs-3g ntfsprogs parted
 
 # TODO: Check connectivity with API server
-
+CURL=/usr/bin/curl --connect-timeout 5
 POOL_MOUNTPOINT=/mnt/pool
 POOL_TEMPLATES=$POOL_MOUNTPOINT/templates
 POOL_DEPLOYMENTS=$POOL_MOUNTPOINT/deployments
@@ -168,13 +168,13 @@ if [ -z $URL ]; then
     case $(cat /tmp/transfer_method) in
         http|tee|proxy)
             dialog --menu "Select server" 0 0 0 \
-                butterknife "Local server" \
-                mgmt.koodur.com "Koodur OÜ" >/tmp/server_hostname
+                http://butterknife      "Local server" \
+                https://mgmt.koodur.com "Koodur LLC" 2>/tmp/server_hostname
         ;;
     esac
 fi
 
-URL="https://$(cat /tmp/server_hostname)/api"
+URL="$(cat /tmp/server_hostname)/api"
 
 ################################
 ### Template selection phase ###
@@ -189,7 +189,7 @@ if [ -z $TEMPLATE ]; then
         ;;
         *)
             # Fetch template list
-            curl -s $URL/container/ \
+            $CURL -s $URL/container/ \
                 | jq '.containers[] | .name + " \"" + .description + "\""' -r \
                 > /tmp/available_templates
         ;;
@@ -209,7 +209,7 @@ if [ -z $SNAPSHOT ]; then
     case $(cat /tmp/transfer_method) in
         http|tee|proxy|multicast)
             # Fetch snapshot list
-            curl -s $URL/container/$TEMPLATE/snapshot/ \
+            $CURL -s $URL/container/$TEMPLATE/snapshot/ \
                 > /tmp/available_snapshots.json        
 
             cat /tmp/available_snapshots.json \
@@ -280,7 +280,7 @@ case $(cat /tmp/partitioning_method) in
                     | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
             ;;
             http)
-                curl $STREAM \
+                $CURL $STREAM \
                     | zcat \
                     | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
             ;;
@@ -293,13 +293,13 @@ case $(cat /tmp/partitioning_method) in
                 sleep 1
                 udp-sender --nokbd --no-progress --min-receivers 1 --min-wait 5 /tmp/multicast_stream &
                 sleep 1
-                curl -s $STREAM | tee /tmp/multicast_stream > /tmp/local_stream
+                $CURL -s $STREAM | tee /tmp/multicast_stream > /tmp/local_stream
                 sleep 2
                 # TODO: Ensure btrfs receive has finished
             ;;
             proxy)
                 dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
-                curl -s $STREAM \
+                $CURL -s $STREAM \
                     | udp-sender --nokbd --min-receivers 1 --min-wait 5
             ;;
         esac
