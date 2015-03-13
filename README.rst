@@ -7,15 +7,22 @@ and LXC containers.
 .. figure:: img/butterknife-multicast-usecase.png
 
     Butterknife can be used to deploy hunders Linux workstations simultaneously
+    
+General workflow
+----------------
+
+1. Prepare template of your customized OS in a LXC container
+2. Boot provisioning image and deploy the template
+3. Enjoy using your favourite Linux-based OS :)
 
 Features
 --------
 
-* Prepare template of your favourite Linux based OS using LXC
-* Deploy customized OS in 5 minutes
-* Deploy hundreds of machines simultanously within same timeframe
-* Perform incremental upgrades
-* Persistent Btrfs subvolumes for home folders, Puppet keys etc
+* Minified provisioning image (<15MB) which can be booted either over PXE or from USB key.
+* Deploy customized Linux-based OS over HTTP in 5 minutes.
+* Deploy hundreds of machines simultanously within same timeframe over multicast.
+* Perform incremental upgrades using Btrfs.
+* Persistent Btrfs subvolumes for home folders, Puppet keys etc.
 
 Installation
 ------------
@@ -33,6 +40,8 @@ You can install Ubuntu 14.10 kernel on 14.04 simply by doing following:
 Also install the latest version of btrfs-tools, versions 3.12 and 3.16
 in Ubuntu repositories are known to be unusable:
 
+.. code:: bash
+
     wget -c https://launchpadlibrarian.net/190998686/btrfs-tools_3.17-1.1_amd64.deb
     sudo dpkg -i btrfs-tools_3.17-1.1_amd64.deb
 
@@ -45,7 +54,7 @@ set up Ubuntu 14.04 container use:
 
 .. code:: bash
 
-    lxc-create -n your-template -B btrfs -t ubuntu -- -r trusty -a amd64
+    lxc-create -n your-template -B btrfs -t ubuntu -- -r trusty -a i386
 
 Use your favourite configuration management tool to customize the container,
 eg for Puppet users:
