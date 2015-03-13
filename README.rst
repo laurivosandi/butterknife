@@ -30,6 +30,11 @@ You can install Ubuntu 14.10 kernel on 14.04 simply by doing following:
 
     apt-get install linux-image-generic-lts-utopic
 
+Also install the latest version of btrfs-tools, versions 3.12 and 3.16
+in Ubuntu repositories are known to be unusable:
+
+    wget -c https://launchpadlibrarian.net/190998686/btrfs-tools_3.17-1.1_amd64.deb
+    sudo dpkg -i btrfs-tools_3.17-1.1_amd64.deb
 
 
 Publishing workflow
@@ -73,6 +78,43 @@ Use butterknife to take a snapshot of the LXC container:
 .. code:: bash
 
     butterknife-release -n your-template
+
+Provisioning using PXE
+----------------------
+
+PXE is the preferred way of serving the provisioning image.
+
+.. code:: bash
+
+    sudo apt-get install pxelinux
+    cp /usr/lib/PXELINUX/pxelinux.0 /srv/tftp/
+    cp /usr/lib/syslinux/modules/bios/*.c32 /srv/tftp/
+    wget https://mgmt.koodur.com/api/provision/butterknife-i386 \
+        -O /srv/tftp/butterknife-i386
+    
+Set up following pxelinux.cfg/default in /srv/tftp:
+
+.. code::
+
+    default menu.c32
+    prompt 0
+    timeout 150
+    menu title Butterknife provisioning tool
+
+    label mbr
+        menu label Boot from local harddisk
+        localboot 0
+
+    label butterknife
+        menu LABEL Butterknife provisioning i386, HTTP-only
+        kernel butterknife-i386
+        append bk_url=https://mgmt.koodur.com/api/ quiet
+
+    label butterknife
+        menu label Butterknife provisioning i386, multicast
+        kernel butterknife-i386  
+        append bk_url=https://mgmt.koodur.com/api/ bk_template=edu-workstation-trusty-i386-template bk_snapshot=snap25 quiet
+
     
 Deployment workflow
 -------------------
