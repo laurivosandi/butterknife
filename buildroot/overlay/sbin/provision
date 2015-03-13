@@ -62,123 +62,128 @@ done
 set -x # Don't echo
 set -e # Bail on error
 
-#############################
-### Target disk selection ###
-#############################
-if [ -z "$(ls /sys/class/block/" ]; then
-    dialog --msgbox "Butterknife was unable to detect any harddisks,\
-        are you sure harddisk is connected and we have drivers for it?" 0 0
-    exit 255
-fi
-
-for disk in /sys/class/block/*; do
-    if [ -d $disk/device ]; then
-        slug=$(basename $disk)
-        sector_count=$(cat $disk/size)
-        sector_size=$(cat $disk/queue/hw_sector_size)
-        # Hack around these dumbass cardreaders
-        if [ "$sector_count" == "0" ]; then
-            continue
-        fi
-        size=$(expr $sector_count / 1000000 \* $sector_size / 1000)G
-        echo "$slug \"$(cat $disk/device/model | xargs) ($size)\"";
-    fi
-done > /tmp/disks
-
-dialog \
-    --menu "Target disk" 0 0 0 \
-    --file /tmp/disks \
-    2> /tmp/selected_disk
-
-DISK_SLUG=$(cat /tmp/selected_disk)
-DISK=/dev/$DISK_SLUG
-
-dialog --menu "Partitioning $DISK" 0 0 0 \
-    purge           "Overwrite whole disk" \
-    reformat        "Reformat partition" \
-    unpartitioned   "Use unpartitioned area" \
-    receive         "Receive into existing btrfs filesystem" \
-    2> /tmp/partitioning_method
-
-# TODO: deploy          "Deploy received template" \
-# TODO: postinstall     "Run postinstall scripts (reinstall GRUB)" \
-
-# TODO: EFI way is not currently covered!
-case $(cat /tmp/partitioning_method) in
-    unpartitioned)
-        clear 
-        echo "Attempting to create new partition in unpartitioned space"
-        echo -e "n\np\n\n\n\nw" | fdisk $DISK
-    ;;
-    purge)
-        clear
-        echo "Purging whole disk"
-        echo -e "o\nn\np\n\n\n\nw" | fdisk $DISK
-    ;;
-esac
-
-########################################
-### Target partition selection phase ###
-########################################
-for partition in $DISK?; do
-    partition_slug=$(echo $partition | cut -d "/" -f 3)
-    sector_count=$(cat /sys/block/$DISK_SLUG/$partition_slug/size)
-    sector_size=$(cat /sys/block/$DISK_SLUG/queue/hw_sector_size)
-    size=$(expr $sector_count / 1000000 \* $sector_size / 1000000)G
-    if [ $size == "0G" ]; then
-        size=$(expr $sector_count / 1000 \* $sector_size / 1000)M
-    fi
-    echo "$partition \"$size\"";
-done > /tmp/partitions
-
-dialog \
-    --menu "Target partition" 0 0 0 \
-    --file /tmp/partitions \
-    2> /tmp/selected_partition
-
-PARTITION=$(cat /tmp/selected_partition)
-PARTITION_SLUG=$(echo $PARTITION | cut -d "/" -f 3)
-
-case $(cat /tmp/partitioning_method) in
-    purge|reformat|unpartitioned) 
-        clear
-        echo "Creating clean btrfs filesystem on $PARTITON"
-        mkfs.btrfs -f $PARTITION
-    ;;
-esac
-
-# Attempt to mount target directory
-mkdir -p $POOL_MOUNTPOINT
-mount $PARTITION $POOL_MOUNTPOINT -o subvol=/
-mkdir -p $POOL_TEMPLATES
-mkdir -p $POOL_DEPLOYMENTS
-
-if [ $? -ne 0 ]; then
-    dialog --msgbox "Mounting $PARTITION at $POOL_MOUNTPOINT failed, are you sure kernel has btrfs support built-in?" 0 0
-    exit 255
-fi
-
 #######################################
 ### Transfer method selection phase ###
 #######################################
-case $(cat /tmp/partitioning_method) in
-    purge|reformat|unpartitioned|receive)
-        # Determine transfer method
-        if [ -z $TEMPLATE ] || [ -z $SNAPSHOT ]; then
-            echo "http" > /tmp/transfer_method
-        else
-            dialog --menu "Select transfer method" 0 0 0 \
-                http "HTTP-only" \
-                multicast "Multicast receive" \
-                tee "Multicast via HTTP and write" \
-                proxy "Only proxy HTTP to multicast" 2>/tmp/transfer_method
+
+if [ -z $TEMPLATE ] || [ -z $SNAPSHOT ]; then
+    echo "http" > /tmp/transfer_method
+else
+    dialog --menu "Select transfer method" 0 0 0 \
+        http "HTTP-only" \
+        multicast "Multicast receive" \
+        tee "Multicast via HTTP and write" \
+        proxy "Only proxy HTTP to multicast" 2>/tmp/transfer_method
+fi
+
+
+##################################
+### Harddisk preparation phase ###
+##################################
+
+case $(cat /tmp/transfer_method) in
+    http|multicast|tee)
+        #############################
+        ### Target disk selection ###
+        #############################
+
+        if [ -z "$(ls /sys/class/block/)" ]; then
+            dialog --msgbox "Butterknife was unable to detect any harddisks,\
+                are you sure harddisk is connected and we have drivers for it?" 0 0
+            exit 255
         fi
-    ;;
-    deploy)
-        echo "local" > /tmp/transfer_method
+
+        for disk in /sys/class/block/*; do
+            if [ -d $disk/device ]; then
+                slug=$(basename $disk)
+                sector_count=$(cat $disk/size)
+                sector_size=$(cat $disk/queue/hw_sector_size)
+                # Hack around these dumbass cardreaders
+                if [ "$sector_count" == "0" ]; then
+                    continue
+                fi
+                size=$(expr $sector_count / 1000000 \* $sector_size / 1000)G
+                echo "$slug \"$(cat $disk/device/model | xargs) ($size)\"";
+            fi
+        done > /tmp/disks
+
+        dialog \
+            --menu "Target disk" 0 0 0 \
+            --file /tmp/disks \
+            2> /tmp/selected_disk
+
+        DISK_SLUG=$(cat /tmp/selected_disk)
+        DISK=/dev/$DISK_SLUG
+
+        dialog --menu "Partitioning $DISK" 0 0 0 \
+            purge           "Overwrite whole disk" \
+            reformat        "Reformat partition" \
+            unpartitioned   "Use unpartitioned area" \
+            receive         "Receive into existing btrfs filesystem" \
+            2> /tmp/partitioning_method
+
+        # TODO: deploy          "Deploy received template" \
+        # TODO: postinstall     "Run postinstall scripts (reinstall GRUB)" \
+
+        # TODO: EFI way is not currently covered!
+        case $(cat /tmp/partitioning_method) in
+            unpartitioned)
+                clear 
+                echo "Attempting to create new partition in unpartitioned space"
+                echo -e "n\np\n\n\n\nw" | fdisk $DISK
+            ;;
+            purge)
+                clear
+                echo "Purging whole disk"
+                echo -e "o\nn\np\n\n\n\nw" | fdisk $DISK
+            ;;
+        esac
+
+        ########################################
+        ### Target partition selection phase ###
+        ########################################
+        for partition in $DISK?; do
+            partition_slug=$(echo $partition | cut -d "/" -f 3)
+            sector_count=$(cat /sys/block/$DISK_SLUG/$partition_slug/size)
+            sector_size=$(cat /sys/block/$DISK_SLUG/queue/hw_sector_size)
+            size=$(expr $sector_count / 1000000 \* $sector_size / 1000000)G
+            if [ $size == "0G" ]; then
+                size=$(expr $sector_count / 1000 \* $sector_size / 1000)M
+            fi
+            echo "$partition \"$size\"";
+        done > /tmp/partitions
+
+        dialog \
+            --menu "Target partition" 0 0 0 \
+            --file /tmp/partitions \
+            2> /tmp/selected_partition
+
+        PARTITION=$(cat /tmp/selected_partition)
+        PARTITION_SLUG=$(echo $PARTITION | cut -d "/" -f 3)
+
+        case $(cat /tmp/partitioning_method) in
+            purge|reformat|unpartitioned) 
+                clear
+                echo "Creating clean btrfs filesystem on $PARTITON"
+                mkfs.btrfs -f $PARTITION
+            ;;
+        esac
+
+        # Attempt to mount target directory
+        mkdir -p $POOL_MOUNTPOINT
+        mount $PARTITION $POOL_MOUNTPOINT -o subvol=/
+        mkdir -p $POOL_TEMPLATES
+        mkdir -p $POOL_DEPLOYMENTS
+
+        if [ $? -ne 0 ]; then
+            dialog --msgbox "Mounting $PARTITION at $POOL_MOUNTPOINT failed, are you sure kernel has btrfs support built-in?" 0 0
+            exit 255
+        fi
+        
+        mkdir -p $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
     ;;
     *)
-        echo "none" > /tmp/transfer_method
+        echo "pass" > /tmp/partitioning_method
     ;;
 esac
 
@@ -191,11 +196,10 @@ if [ -z $URL ]; then
             dialog --menu "Select server" 0 0 0 \
                 http://butterknife      "Local server" \
                 https://mgmt.koodur.com "Koodur LLC" 2>/tmp/server_hostname
+            URL="$(cat /tmp/server_hostname)/api"
         ;;
     esac
 fi
-
-URL="$(cat /tmp/server_hostname)/api"
 
 ################################
 ### Template selection phase ###
@@ -263,14 +267,24 @@ fi
 TEMPLATE_SUBVOL=templates/$TEMPLATE/$SNAPSHOT/
 clear
 
-######################
-### Transfer phase ###
-######################
-case $(cat /tmp/partitioning_method) in
-    purge|reformat|unpartitioned|receive)
+#####################################
+### Stream URL construction phase ###
+#####################################
+
+case $(cat /tmp/transfer_method) in
+    http|tee|proxy)
         # Build btrfs-stream URL
         STREAM="$URL/container/$TEMPLATE/snapshot/$SNAPSHOT/stream?src="
+    ;;
+esac
 
+
+###############################################
+### Allow differential snapshots using HTTP ###
+###############################################
+
+case $(cat /tmp/transfer_method) in
+    http)
         # Determine differential snapshot parents
         if [ -d $POOL_TEMPLATES/$TEMPLATE ]; then
             cat /tmp/available_snapshots.json | jq -r '.snapshots[] .name' > /tmp/available_snapshot_names
@@ -287,99 +301,104 @@ case $(cat /tmp/partitioning_method) in
         fi
 
         echo "Final URL is $STREAM"
-
-        mkdir -p $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
-
-        # Mark dirty subvolumes
-        echo $TEMPLATE_SUBVOL > $POOL_TEMPLATES/dirty
-        sync
-
-        case $(cat /tmp/transfer_method) in
-            multicast)
-                udp-receiver --nokbd \
-                    | zcat \
-                    | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
-            ;;
-            http)
-                curl -A $AGENT $STREAM \
-                    | zcat \
-                    | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
-            ;;
-            tee)
-                dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
-
-                mkfifo /tmp/multicast_stream
-                mkfifo /tmp/local_stream
-                zcat /tmp/local_stream | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL &
-                sleep 1
-                udp-sender --nokbd --no-progress --min-receivers 1 --min-wait 5 /tmp/multicast_stream &
-                sleep 1
-                curl -A $AGENT  -s $STREAM | tee /tmp/multicast_stream > /tmp/local_stream
-                sleep 2
-                # TODO: Ensure btrfs receive has finished
-            ;;
-            proxy)
-                dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
-                curl -A $AGENT -s $STREAM \
-                    | udp-sender --nokbd --min-receivers 1 --min-wait 5
-            ;;
-        esac
-
-        # Remove dirty flag
-        rm $POOL_TEMPLATES/dirty
-        sync
     ;;
 esac
 
-#################################
-### Filesystem creation phase ###
-#################################
+
+
+# TODO: Mark dirty subvol
+
+######################
+### Transfer phase ###
+######################
+
+case $(cat /tmp/transfer_method) in
+    multicast)
+        udp-receiver --nokbd \
+            | zcat \
+            | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
+    ;;
+    http)
+        curl -A $AGENT $STREAM \
+            | zcat \
+            | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
+    ;;
+    tee)
+        dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
+
+        mkfifo /tmp/multicast_stream
+        mkfifo /tmp/local_stream
+        zcat /tmp/local_stream | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL &
+        sleep 1
+        udp-sender --nokbd --no-progress --min-receivers 1 --min-wait 5 /tmp/multicast_stream &
+        sleep 1
+        curl -A $AGENT  -s $STREAM | tee /tmp/multicast_stream > /tmp/local_stream
+        sleep 2
+        # TODO: Ensure btrfs receive has finished
+    ;;
+    proxy)
+        dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
+        curl -A $AGENT -s $STREAM \
+            | udp-sender --nokbd --min-receivers 1 --min-wait 5
+    ;;
+esac
+
+sync
+
 case $(cat /tmp/partitioning_method) in
-    purge|reformat|unpartitioned|receive|deploy)
+    pass)
+        echo "Skipping template deployment"
+    ;;
+    *)
+        #################################
+        ### Template deployment phase ###
+        #################################
+        
         DEPLOY_SUBVOL="deployments/$(date '+%Y-%m-%d_%H:%M:%S')"
         btrfs subvolume snapshot $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL/* "$POOL_MOUNTPOINT/$DEPLOY_SUBVOL"
-    ;;
-    fixgrub)
-        echo "DEPLOYED SNAPSHOT SELECTION NOT IMPLEMENTED YET"
-        exit 255
+
+        ###############################
+        ### Run post-deploy scripts ###
+        ###############################
+
+        # Mount deployment subvolume at target directory
+        mkdir -p $TARGET_MOUNTPOINT
+        mount $PARTITION $TARGET_MOUNTPOINT -o subvol=$DEPLOY_SUBVOL
+
+        # Mount pool also for chroot
+        mkdir -p $TARGET_MOUNTPOINT$POOL_MOUNTPOINT
+        mount $PARTITION $TARGET_MOUNTPOINT$POOL_MOUNTPOINT -o subvol=/
+
+        # Mount stuff for chroot
+        mount --bind /dev/ $TARGET_MOUNTPOINT/dev/
+        mount --bind /sys/ $TARGET_MOUNTPOINT/sys/
+        mount --bind /proc/ $TARGET_MOUNTPOINT/proc/
+
+        # Export variables for postinstall scripts
+        export BUTTERKNIFE_DOMAIN=$DOMAIN
+        export BUTTERKNIFE_TEMPLATE_SUBVOL=$TEMPLATE_SUBVOL
+        export BUTTERKNIFE_DEPLOY_SUBVOL=$DEPLOY_SUBVOL
+        export BUTTERKNIFE_PARTITION=$PARTITION
+        export BUTTERKNIFE_DISK=$DISK
+        export BUTTERKNIFE_POOL_MOUNTPOINT=$POOL_MOUNTPOINT
+        export BUTTERKNIFE_POOL_UUID=$(blkid -s UUID -o value $PARTITION)
+        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+        # Run postinstall scripts, presumably in sorted order
+        chroot $TARGET_MOUNTPOINT butterknife-postdeploy
+
+        # Unmount directories
+        umount $TARGET_MOUNTPOINT/mnt/pool
+        umount $TARGET_MOUNTPOINT/dev
+        umount $TARGET_MOUNTPOINT/sys
+        umount $TARGET_MOUNTPOINT/proc
+        umount $TARGET_MOUNTPOINT
+
+        echo "Flushing buffers"
+        sync
+        sleep 1
+        echo "Rebooting machine"
+        reboot -f
     ;;
 esac
 
-# Mount deployment subvolume at target directory
-mkdir -p $TARGET_MOUNTPOINT
-mount $PARTITION $TARGET_MOUNTPOINT -o subvol=$DEPLOY_SUBVOL
-
-# Mount pool also for chroot
-mkdir -p $TARGET_MOUNTPOINT$POOL_MOUNTPOINT
-mount $PARTITION $TARGET_MOUNTPOINT$POOL_MOUNTPOINT -o subvol=/
-
-# Mount stuff for chroot
-mount --bind /dev/ $TARGET_MOUNTPOINT/dev/
-mount --bind /sys/ $TARGET_MOUNTPOINT/sys/
-mount --bind /proc/ $TARGET_MOUNTPOINT/proc/
-
-# Export variables for postinstall scripts
-export BUTTERKNIFE_DOMAIN=$DOMAIN
-export BUTTERKNIFE_TEMPLATE_SUBVOL=$TEMPLATE_SUBVOL
-export BUTTERKNIFE_DEPLOY_SUBVOL=$DEPLOY_SUBVOL
-export BUTTERKNIFE_PARTITION=$PARTITION
-export BUTTERKNIFE_DISK=$DISK
-export BUTTERKNIFE_POOL_MOUNTPOINT=$POOL_MOUNTPOINT
-export BUTTERKNIFE_POOL_UUID=$(blkid -s UUID -o value $PARTITION)
-export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-
-# Run postinstall scripts, presumably in sorted order
-chroot $TARGET_MOUNTPOINT butterknife-postdeploy
-
-# Unmount directories
-umount $TARGET_MOUNTPOINT/mnt/pool
-umount $TARGET_MOUNTPOINT/dev
-umount $TARGET_MOUNTPOINT/sys
-umount $TARGET_MOUNTPOINT/proc
-umount $TARGET_MOUNTPOINT
-
-echo "Flushing buffers"
-sync
-sleep 1
-echo "Rebooting machine"
-reboot -f

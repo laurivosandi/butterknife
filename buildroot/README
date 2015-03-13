@@ -30,6 +30,7 @@ Enable:
         ms-sys
         btrfs-progs
         ntfs-3g
+            ntfsprogs
     Development tools
         jq
     System tools 
