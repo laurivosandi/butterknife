@@ -28,7 +28,7 @@ fi
 #######################################
 ### Check for presence of utilities ###
 #######################################
-for util in btrfs jq fdisk find ntfsresize; do
+for util in btrfs jq fdisk find ntfsresize udp-sender udp-receiver; do
     if [ -z "$(which $util)" ]; then
         dialog --msgbox "Butterknife was unable to locate $util,\
             are you sure the provisioning image was compiled properly?" 0 0
@@ -102,7 +102,7 @@ case $(cat /tmp/transfer_method) in
                 if [ "$sector_count" == "0" ]; then
                     continue
                 fi
-                size=$(expr $sector_count / 1000000 \* $sector_size / 1000)G
+                size=$(($sector_count / 1000000 \* $sector_size / 1000))G
                 echo "$slug \"$(cat $disk/device/model | xargs) ($size)\"";
             fi
         done > /tmp/disks
@@ -146,9 +146,9 @@ case $(cat /tmp/transfer_method) in
             partition_slug=$(echo $partition | cut -d "/" -f 3)
             sector_count=$(cat /sys/block/$DISK_SLUG/$partition_slug/size)
             sector_size=$(cat /sys/block/$DISK_SLUG/queue/hw_sector_size)
-            size=$(expr $sector_count / 1000000 \* $sector_size / 1000000)G
+            size=$(($sector_count / 1000000 \* $sector_size / 1000))G
             if [ $size == "0G" ]; then
-                size=$(expr $sector_count / 1000 \* $sector_size / 1000)M
+                size=$(($sector_count / 1000 \* $sector_size / 1000))M
             fi
             echo "$partition \"$size\"";
         done > /tmp/partitions
@@ -179,8 +179,6 @@ case $(cat /tmp/transfer_method) in
             dialog --msgbox "Mounting $PARTITION at $POOL_MOUNTPOINT failed, are you sure kernel has btrfs support built-in?" 0 0
             exit 255
         fi
-        
-        mkdir -p $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
     ;;
     *)
         echo "pass" > /tmp/partitioning_method
@@ -314,20 +312,21 @@ esac
 
 case $(cat /tmp/transfer_method) in
     multicast)
+        mkdir -p $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
         udp-receiver --nokbd \
             | zcat \
             | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
     ;;
     http)
+        mkdir -p $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
         curl -A $AGENT $STREAM \
             | zcat \
             | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
     ;;
     tee)
+        mkdir -p $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
         dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
-
-        mkfifo /tmp/multicast_stream
-        mkfifo /tmp/local_stream
+        mkfifo /tmp/multicast_stream /tmp/local_stream
         zcat /tmp/local_stream | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL &
         sleep 1
         udp-sender --nokbd --no-progress --min-receivers 1 --min-wait 5 /tmp/multicast_stream &
