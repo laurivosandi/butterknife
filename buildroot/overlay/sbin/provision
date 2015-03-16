@@ -56,6 +56,9 @@ for chunk in $(cat /proc/cmdline); do
         bk_snapshot=*)
             SNAPSHOT="${chunk#bk_snapshot=}"
         ;;
+        bk_host_prefix=*)
+            HOST_PREFIX="{chunk#bk_host_prefix=}"
+        ;;
     esac
 done
 
@@ -265,6 +268,19 @@ fi
 TEMPLATE_SUBVOL=templates/$TEMPLATE/$SNAPSHOT/
 clear
 
+######################
+### Hostname input ###
+######################
+FIRST_INTERFACE=$(ls /sys/class/net/ | grep -v '^lo$' | head -n 1)
+MAC=$(cat /sys/class/net/$FIRST_INTERFACE/address | sed -e 's/://g')
+
+if [ -z $HOST_PREFIX ]; then
+    dialog --inputbox "Enter hostname" 0 0 "host-$MAC" 2> /tmp/hostname
+    HOSTNAME=$(cat /tmp/hostname)
+else
+    HOSTNAME="$HOST_PREFIX-$MAC"
+fi
+
 #####################################
 ### Stream URL construction phase ###
 #####################################
@@ -374,6 +390,7 @@ case $(cat /tmp/partitioning_method) in
         mount --bind /proc/ $TARGET_MOUNTPOINT/proc/
 
         # Export variables for postinstall scripts
+        export BUTTERKNIFE_HOSTNAME=$HOSTNAME
         export BUTTERKNIFE_DOMAIN=$DOMAIN
         export BUTTERKNIFE_TEMPLATE_SUBVOL=$TEMPLATE_SUBVOL
         export BUTTERKNIFE_DEPLOY_SUBVOL=$DEPLOY_SUBVOL
