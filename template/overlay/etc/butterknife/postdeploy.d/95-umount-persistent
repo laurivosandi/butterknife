@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# Unmount persistent directory
+umount /var/lib/persistent
+

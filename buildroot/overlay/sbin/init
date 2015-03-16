@@ -15,7 +15,15 @@ if [ -z "$(ls /sys/class/net/ | grep -v '^lo$')" ]; then
     exit 254
 fi
 
+echo "Asking for IP using DHCP ..."
 udhcpc
+
+if [ -z "$bk_timeserver" ]; then
+    echo "No timeserver specified, skipping ntpdate"
+else
+    echo "Adjusting time ..."
+    ntpdate $bk_timeserver
+fi
 
 while [ 1 ]; do
     dialog --menu "What do you want to do" 0 0 0 \

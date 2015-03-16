@@ -1,16 +1,23 @@
 #!/bin/bash
 
-SUBVOL="@puppet-persistent-ssl-keys"
-
-if [ ! -d "$BUTTERKNIFE_POOL_MOUNTPOINT/$SUBVOL" ]; then
-    echo "Creating subvolume $SUBVOL on $BUTTERKNIFE_POOL_MOUNTPOINT"
-    btrfs subvolume create "$BUTTERKNIFE_POOL_MOUNTPOINT/$SUBVOL"
+if [ ! -x /usr/bin/puppet ]; then
+    echo "Puppet not installed, skipping Puppet agent state persistence"
+    exit 0
 fi
 
-echo "UUID=$BUTTERKNIFE_POOL_UUID /var/lib/puppet/ssl btrfs defaults,subvol=@puppet-persistent-ssl-keys 0 9" >> /etc/fstab
+mkdir -p /var/lib/persistent/puppet/ssl/certs/
 
-# Create SSL keys for Puppet agent
-mount /var/lib/puppet/ssl
+if [ -e /var/lib/puppet/ssl/certs/ca.pem ]; then
+    echo "Copying Puppet CA certificate ..."
+    cp /var/lib/puppet/ssl/certs/ca.pem /var/lib/persistent/puppet/ssl/certs/ca.pem
+fi
+
+chown puppet:puppet /var/lib/persistent/pupppet
+chmod 750 /var/lib/persistent/puppet
+
+# Substitute /var/lib/puppet with symlink to /var/lib/persistent/puppet
+rm -Rf /var/lib/puppet
+ln -s /var/lib/persistent/puppet /var/lib/puppet
+
 puppet agent --enable
-#puppet agent --onetime --no-daemonize --verbose --waitforcert 5
-umount /var/lib/puppet/ssl
+

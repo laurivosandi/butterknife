@@ -28,7 +28,7 @@ fi
 #######################################
 ### Check for presence of utilities ###
 #######################################
-for util in btrfs jq fdisk find ntfsresize udp-sender udp-receiver; do
+for util in btrfs jq fdisk find ntfsresize udp-sender udp-receiver ntpdate curl; do
     if [ -z "$(which $util)" ]; then
         dialog --msgbox "Butterknife was unable to locate $util,\
             are you sure the provisioning image was compiled properly?" 0 0
@@ -38,30 +38,6 @@ for util in btrfs jq fdisk find ntfsresize udp-sender udp-receiver; do
     fi
 done
 
-# These Bashisms are insane
-for chunk in $(cat /proc/cmdline); do
-    case "$chunk" in
-        bk_url=*)
-            URL="${chunk#bk_url=}"
-        ;;
-        bk_domain=*)
-            DOMAIN="${chunk#bk_domain=}"
-        ;;
-        bk_debug=*)
-            DEBUG="${chunk#bk_debug=}"
-        ;;
-        bk_template=*)
-            TEMPLATE="${chunk#bk_template=}"
-        ;;
-        bk_snapshot=*)
-            SNAPSHOT="${chunk#bk_snapshot=}"
-        ;;
-        bk_host_prefix=*)
-            HOST_PREFIX="{chunk#bk_host_prefix=}"
-        ;;
-    esac
-done
-
 set -x # Don't echo
 set -e # Bail on error
 
@@ -69,7 +45,7 @@ set -e # Bail on error
 ### Transfer method selection phase ###
 #######################################
 
-if [ -z $TEMPLATE ] || [ -z $SNAPSHOT ]; then
+if [ -z $bk_template ] || [ -z $bk_snapshot ]; then
     echo "http" > /tmp/transfer_method
 else
     dialog --menu "Select transfer method" 0 0 0 \
@@ -191,13 +167,13 @@ esac
 ##############################
 ### Server selection phase ###
 ##############################
-if [ -z $URL ]; then
+if [ -z $bk_url ]; then
     case $(cat /tmp/transfer_method) in
         http|tee|proxy)
             dialog --menu "Select server" 0 0 0 \
                 http://butterknife      "Local server" \
-                https://mgmt.koodur.com "Koodur LLC" 2>/tmp/server_hostname
-            URL="$(cat /tmp/server_hostname)/api"
+                https://butterknife.koodur.com "Koodur LLC" 2>/tmp/server_hostname
+            bk_url="$(cat /tmp/server_hostname)/api"
         ;;
     esac
 fi
@@ -205,7 +181,7 @@ fi
 ################################
 ### Template selection phase ###
 ################################
-if [ -z $TEMPLATE ]; then
+if [ -z $bk_template ]; then
     case $(cat /tmp/transfer_method) in
         local)
             echo "" > /tmp/available_templates
@@ -215,7 +191,7 @@ if [ -z $TEMPLATE ]; then
         ;;
         *)
             # Fetch template list
-            curl -A $AGENT -s $URL/container/ \
+            curl -A $AGENT -s $bk_url/container/ \
                 | jq '.containers[] | .name + " \"" + .description + "\""' -r \
                 > /tmp/available_templates
         ;;
@@ -225,17 +201,17 @@ if [ -z $TEMPLATE ]; then
         --menu "Select template to deploy" 0 0 0 \
         --file /tmp/available_templates \
         2>/tmp/selected_template
-    TEMPLATE=$(cat /tmp/selected_template)
+    bk_template=$(cat /tmp/selected_template)
 fi
 
 ################################
 ### Snapshot selection phase ###
 ################################
-if [ -z $SNAPSHOT ]; then
+if [ -z $bk_snapshot ]; then
     case $(cat /tmp/transfer_method) in
         http|tee|proxy|multicast)
             # Fetch snapshot list
-            curl -A $AGENT -s $URL/container/$TEMPLATE/snapshot/ \
+            curl -A $AGENT -s $bk_url/container/$bk_template/snapshot/ \
                 > /tmp/available_snapshots.json        
 
             cat /tmp/available_snapshots.json \
@@ -246,7 +222,7 @@ if [ -z $SNAPSHOT ]; then
         local)
             # List local snapshots
             echo "" > /tmp/available_snapshots
-            for i in $(ls $POOL_TEMPLATES/$TEMPLATE); do
+            for i in $(ls $POOL_TEMPLATES/$bk_template); do
                 echo "$i \"$i\"" >> /tmp/available_snapshots
             done
         ;;
@@ -262,24 +238,35 @@ if [ -z $SNAPSHOT ]; then
         ;;
     esac
 
-    SNAPSHOT=$(cat /tmp/selected_snapshot)
+    bk_snapshot=$(cat /tmp/selected_snapshot)
 fi
 
-TEMPLATE_SUBVOL=templates/$TEMPLATE/$SNAPSHOT/
+bk_template_subvol=templates/$bk_template/$bk_snapshot/
 clear
 
 ######################
 ### Hostname input ###
 ######################
+
 FIRST_INTERFACE=$(ls /sys/class/net/ | grep -v '^lo$' | head -n 1)
 MAC=$(cat /sys/class/net/$FIRST_INTERFACE/address | sed -e 's/://g')
 
-if [ -z $HOST_PREFIX ]; then
-    dialog --inputbox "Enter hostname" 0 0 "host-$MAC" 2> /tmp/hostname
-    HOSTNAME=$(cat /tmp/hostname)
-else
-    HOSTNAME="$HOST_PREFIX-$MAC"
-fi
+case $(cat /tmp/partitioning_method) in
+    receive|pass)
+        echo "Skipping setting hostname"
+    ;;
+    *)
+        case $bk_hostname_policy in
+            auto)
+                bk_hostname="host-$MAC"
+            ;;
+            *)
+                dialog --inputbox "Enter hostname" 0 0 "host-$MAC" 2> /tmp/hostname
+                bk_hostname=$(cat /tmp/hostname)
+            ;;
+        esac
+    ;;
+esac
 
 #####################################
 ### Stream URL construction phase ###
@@ -288,7 +275,7 @@ fi
 case $(cat /tmp/transfer_method) in
     http|tee|proxy)
         # Build btrfs-stream URL
-        STREAM="$URL/container/$TEMPLATE/snapshot/$SNAPSHOT/stream?src="
+        STREAM="$bk_url/container/$bk_template/snapshot/$bk_snapshot/stream?src="
     ;;
 esac
 
@@ -300,12 +287,12 @@ esac
 case $(cat /tmp/transfer_method) in
     http)
         # Determine differential snapshot parents
-        if [ -d $POOL_TEMPLATES/$TEMPLATE ]; then
+        if [ -d $POOL_TEMPLATES/$bk_template ]; then
             cat /tmp/available_snapshots.json | jq -r '.snapshots[] .name' > /tmp/available_snapshot_names
-            ls $POOL_TEMPLATES/$TEMPLATE > /tmp/local_snapshot_names
+            ls $POOL_TEMPLATES/$bk_template > /tmp/local_snapshot_names
             cat /tmp/local_snapshot_names /tmp/available_snapshot_names > /tmp/merged_snapshot_names
 
-            PARENTS=$(cat /tmp/merged_snapshot_names | sort | grep -v $SNAPSHOT | uniq -d)
+            PARENTS=$(cat /tmp/merged_snapshot_names | sort | grep -v $bk_snapshot | uniq -d)
             echo "Snapshot parents are: $PARENTS"
             for parent in $PARENTS; do
                 STREAM="$STREAM$parent,"
@@ -328,22 +315,22 @@ esac
 
 case $(cat /tmp/transfer_method) in
     multicast)
-        mkdir -p $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
+        mkdir -p $POOL_MOUNTPOINT/$bk_template_subvol
         udp-receiver --nokbd \
             | zcat \
-            | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
+            | btrfs receive $POOL_MOUNTPOINT/$bk_template_subvol
     ;;
     http)
-        mkdir -p $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
+        mkdir -p $POOL_MOUNTPOINT/$bk_template_subvol
         curl -A $AGENT $STREAM \
             | zcat \
-            | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
+            | btrfs receive $POOL_MOUNTPOINT/$bk_template_subvol
     ;;
     tee)
-        mkdir -p $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL
+        mkdir -p $POOL_MOUNTPOINT/$bk_template_subvol
         dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
         mkfifo /tmp/multicast_stream /tmp/local_stream
-        zcat /tmp/local_stream | btrfs receive $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL &
+        zcat /tmp/local_stream | btrfs receive $POOL_MOUNTPOINT/$bk_template_subvol &
         sleep 1
         udp-sender --nokbd --no-progress --min-receivers 1 --min-wait 5 /tmp/multicast_stream &
         sleep 1
@@ -369,8 +356,8 @@ case $(cat /tmp/partitioning_method) in
         ### Template deployment phase ###
         #################################
         
-        DEPLOY_SUBVOL="deployments/$(date '+%Y-%m-%d_%H:%M:%S')"
-        btrfs subvolume snapshot $POOL_MOUNTPOINT/$TEMPLATE_SUBVOL/* "$POOL_MOUNTPOINT/$DEPLOY_SUBVOL"
+        bk_deploy_subvol="deployments/$(date '+%Y-%m-%d_%H:%M:%S')"
+        btrfs subvolume snapshot $POOL_MOUNTPOINT/$bk_template_subvol/* "$POOL_MOUNTPOINT/$bk_deploy_subvol"
 
         ###############################
         ### Run post-deploy scripts ###
@@ -378,7 +365,7 @@ case $(cat /tmp/partitioning_method) in
 
         # Mount deployment subvolume at target directory
         mkdir -p $TARGET_MOUNTPOINT
-        mount $PARTITION $TARGET_MOUNTPOINT -o subvol=$DEPLOY_SUBVOL
+        mount $PARTITION $TARGET_MOUNTPOINT -o subvol=$bk_deploy_subvol
 
         # Mount pool also for chroot
         mkdir -p $TARGET_MOUNTPOINT$POOL_MOUNTPOINT
@@ -390,10 +377,10 @@ case $(cat /tmp/partitioning_method) in
         mount --bind /proc/ $TARGET_MOUNTPOINT/proc/
 
         # Export variables for postinstall scripts
-        export BUTTERKNIFE_HOSTNAME=$HOSTNAME
-        export BUTTERKNIFE_DOMAIN=$DOMAIN
-        export BUTTERKNIFE_TEMPLATE_SUBVOL=$TEMPLATE_SUBVOL
-        export BUTTERKNIFE_DEPLOY_SUBVOL=$DEPLOY_SUBVOL
+        export BUTTERKNIFE_HOSTNAME=$bk_hostname
+        export BUTTERKNIFE_DOMAIN=$bk_domain
+        export BUTTERKNIFE_TEMPLATE_SUBVOL=$bk_template_subvol
+        export BUTTERKNIFE_DEPLOY_SUBVOL=$bk_deploy_subvol
         export BUTTERKNIFE_PARTITION=$PARTITION
         export BUTTERKNIFE_DISK=$DISK
         export BUTTERKNIFE_POOL_MOUNTPOINT=$POOL_MOUNTPOINT

@@ -1,0 +1,14 @@
+#!/bin/bash
+
+SUBVOLUME="@persistent"
+MOUNTPOINT=/var/lib/persistent
+
+if [ ! -d "$BUTTERKNIFE_POOL_MOUNTPOINT/$SUBVOLUME" ]; then
+    echo "Creating subvolume $SUBVOLUME on $BUTTERKNIFE_POOL_MOUNTPOINT"
+    btrfs subvolume create "$BUTTERKNIFE_POOL_MOUNTPOINT/$SUBVOLUME"
+fi
+
+echo "Mounting /var/lib/persistent"
+echo "UUID=$BUTTERKNIFE_POOL_UUID /var/lib/persistent btrfs defaults,subvol=$SUBVOLUME 0 9" >> /etc/fstab
+mkdir -p $MOUNTPOINT
+mount $MOUNTPOINT

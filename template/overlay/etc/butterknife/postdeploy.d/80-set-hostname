@@ -1,0 +1,27 @@
+#!/bin/bash
+
+PERSISTENT_HOSTNAME="/var/lib/persistent/hostname"
+
+# Check if we have hostname in persistent directory
+if [ -e $PERSISTENT_HOSTNAME ]; then
+    BUTTERKNIFE_HOSTNAME=$(cat $PERSISTENT_HOSTNAME)
+else
+    if [ -z $BUTTERKNIFE_HOSTNAME ]; then
+        echo "No hostname provided, skipping hostname override"
+        exit 0
+    else
+        echo "Setting /etc/hostname to $BUTTERKNIFE_HOSTNAME"
+        echo $BUTTERKNIFE_HOSTNAME > $PERSISTENT_HOSTNAME
+    fi
+fi
+
+# Persistent hostname
+echo "Setting /etc/hostname to $BUTTERKNIFE_HOSTNAME"
+echo "$BUTTERKNIFE_HOSTNAME" > /etc/hostname
+
+echo "Substituting /etc/hosts"
+if [ -z "$BUTTERKNIFE_DOMAIN" ]; then
+    sed -i -e "s/127\.0\.1\.1.*$/127.0.1.1 $BUTTERKNIFE_HOSTNAME/g" /etc/hosts
+else
+    sed -i -e "s/127\.0\.1\.1.*$/127.0.1.1 $BUTTERKNIFE_HOSTNAME.$BUTTERKNIFE_DOMAIN $BUTTERKNIFE_HOSTNAME/g" /etc/hosts
+fi
