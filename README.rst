@@ -7,15 +7,22 @@ and LXC containers.
 .. figure:: img/butterknife-multicast-usecase.png
 
     Butterknife can be used to deploy hunders Linux workstations simultaneously
+    
+General workflow
+----------------
+
+1. Prepare template of your customized OS in a LXC container
+2. Boot provisioning image and deploy the template
+3. Enjoy using your favourite Linux-based OS :)
 
 Features
 --------
 
-* Prepare template of your favourite Linux based OS using LXC
-* Deploy customized OS in 5 minutes
-* Deploy hundreds of machines simultanously within same timeframe
-* Perform incremental upgrades
-* Persistent Btrfs subvolumes for home folders, Puppet keys etc
+* Minified provisioning image (<15MB) which can be booted either over PXE or from USB key.
+* Deploy customized Linux-based OS over HTTP in 5 minutes.
+* Deploy hundreds of machines simultanously within same timeframe over multicast.
+* Perform incremental upgrades using Btrfs.
+* Persistent Btrfs subvolumes for home folders, Puppet keys etc.
 
 Installation
 ------------
@@ -30,6 +37,13 @@ You can install Ubuntu 14.10 kernel on 14.04 simply by doing following:
 
     apt-get install linux-image-generic-lts-utopic
 
+Also install the latest version of btrfs-tools, versions 3.12 and 3.16
+in Ubuntu repositories are known to be unusable:
+
+.. code:: bash
+
+    wget -c https://launchpadlibrarian.net/190998686/btrfs-tools_3.17-1.1_amd64.deb
+    sudo dpkg -i btrfs-tools_3.17-1.1_amd64.deb
 
 
 Publishing workflow
@@ -40,7 +54,7 @@ set up Ubuntu 14.04 container use:
 
 .. code:: bash
 
-    lxc-create -n your-template -B btrfs -t ubuntu -- -r trusty -a amd64
+    lxc-create -n your-template -B btrfs -t ubuntu -- -r trusty -a i386
 
 Use your favourite configuration management tool to customize the container,
 eg for Puppet users:
@@ -73,6 +87,43 @@ Use butterknife to take a snapshot of the LXC container:
 .. code:: bash
 
     butterknife-release -n your-template
+
+Provisioning using PXE
+----------------------
+
+PXE is the preferred way of serving the provisioning image.
+
+.. code:: bash
+
+    sudo apt-get install pxelinux
+    cp /usr/lib/PXELINUX/pxelinux.0 /srv/tftp/
+    cp /usr/lib/syslinux/modules/bios/*.c32 /srv/tftp/
+    wget https://mgmt.koodur.com/api/provision/butterknife-i386 \
+        -O /srv/tftp/butterknife-i386
+    
+Set up following pxelinux.cfg/default in /srv/tftp:
+
+.. code::
+
+    default menu.c32
+    prompt 0
+    timeout 150
+    menu title Butterknife provisioning tool
+
+    label mbr
+        menu label Boot from local harddisk
+        localboot 0
+
+    label butterknife
+        menu LABEL Butterknife provisioning i386, HTTP-only
+        kernel butterknife-i386
+        append bk_url=https://mgmt.koodur.com/api/ quiet
+
+    label butterknife
+        menu label Butterknife provisioning i386, multicast
+        kernel butterknife-i386  
+        append bk_url=https://mgmt.koodur.com/api/ bk_template=edu-workstation-trusty-i386-template bk_snapshot=snap25 quiet
+
     
 Deployment workflow
 -------------------

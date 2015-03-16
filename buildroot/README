@@ -55,6 +55,11 @@ Enable:
     System configuration
         Init system -> none
         Root filesystem overlay directories -> path/to/butterknife/buildroot/overlay
+    Networking applictions
+        udpcast
+        udpcast tools selection
+            sender
+            receiver
 
 Make sure you:
 
