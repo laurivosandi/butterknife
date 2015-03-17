@@ -149,14 +149,24 @@ Set up following in /srv/tftp/pxelinux.cfg/default:
 Setting up PXE boot
 -------------------
 
+If you're running ISC DHCP server add following to your subnet section
+and restart the service:
+
+.. code::
+
+    next-server 213.168.13.40;
+    filename "pxelinux.0";
+
 If you have OpenWrt based router simply add following to 
-the **config dnsmasq** section of /etc/config/dhcp:
+the **config dnsmasq** section of /etc/config/dhcp and restart
+the service:
 
 .. code::
 
     option dhcp_boot 'pxelinux.0,,213.168.13.40'
 
-If running vanilla *dnsmasq*, then simply add following to /etc/dnsmasq.conf:
+If running vanilla *dnsmasq*, then simply add following to /etc/dnsmasq.conf
+and restart the service:
 
 .. code::
 
@@ -167,8 +177,6 @@ set **Next Server** option to 213.168.13.40 and **Boot file name** option to
 pxelinux.0:
 
 .. figure:: img/mikrotik-pxe-boot.png
-
-    DHCP server settings
 
 If you've set up your own TFTP server as described in the previous
 section substitute 213.168.13.40 with your TFTP server's IP address.
