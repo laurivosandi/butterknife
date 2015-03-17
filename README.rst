@@ -56,6 +56,13 @@ set up Ubuntu 14.04 container use:
 
     lxc-create -n your-template -B btrfs -t ubuntu -- -r trusty -a i386
 
+Start and enter the container:
+
+.. code:: bash
+
+    lxc-start -d -n your-template
+    lxc-attach -n your-template
+
 Use your favourite configuration management tool to customize the container,
 eg for Puppet users:
 
@@ -98,7 +105,7 @@ PXE is the preferred way of serving the provisioning image.
     sudo apt-get install pxelinux
     cp /usr/lib/PXELINUX/pxelinux.0 /srv/tftp/
     cp /usr/lib/syslinux/modules/bios/*.c32 /srv/tftp/
-    wget https://mgmt.koodur.com/api/provision/butterknife-i386 \
+    wget https://butterknife.koodur.com/api/provision/butterknife-i386 \
         -O /srv/tftp/butterknife-i386
     
 Set up following pxelinux.cfg/default in /srv/tftp:
@@ -107,7 +114,7 @@ Set up following pxelinux.cfg/default in /srv/tftp:
 
     default menu.c32
     prompt 0
-    timeout 150
+    timeout 600
     menu title Butterknife provisioning tool
 
     label mbr
@@ -115,14 +122,24 @@ Set up following pxelinux.cfg/default in /srv/tftp:
         localboot 0
 
     label butterknife
-        menu LABEL Butterknife provisioning i386, HTTP-only
+        menu label Deploy edu workstation (i386)
         kernel butterknife-i386
-        append bk_url=https://mgmt.koodur.com/api/ quiet
+        append bk_snapshot=snap34 bk_url=https://butterknife.koodur.com/api/ bk_template=edu-workstation-trusty-i386-template bk_timeserver=2.ubuntu.pool.ntp.org quiet
 
     label butterknife
-        menu label Butterknife provisioning i386, multicast
-        kernel butterknife-i386  
-        append bk_url=https://mgmt.koodur.com/api/ bk_template=edu-workstation-trusty-i386-template bk_snapshot=snap25 quiet
+        menu LABEL Butterknife (i386, HTTP-only)
+        kernel butterknife-i386
+        append bk_url=https://butterknife.koodur.com/api/ quiet
+
+    label butterknife
+        menu LABEL Butterknife (amd64, HTTP-only)
+        kernel butterknife-amd64
+        append bk_url=https://butterknife.koodur.com/api/ quiet
+
+    label butterknife
+        menu LABEL Butterknife (i386, debug)
+        kernel butterknife-i386
+        append bk_url=https://butterknife.koodur.com/api/ debug
 
     
 Deployment workflow

@@ -56,6 +56,8 @@ Enable:
         Init system -> none
         Root filesystem overlay directories -> path/to/butterknife/buildroot/overlay
     Networking applictions
+        ntp
+            ntpdate
         udpcast
         udpcast tools selection
             sender
@@ -64,7 +66,7 @@ Enable:
 Make sure you:
 
 * Make sure you use fdisk from util-linux, not from busybox.
-* Make sure you enable support for necessary ethernet cards and SATA controllers 
+* Make sure you enable support for necessary ethernet cards, USB and SATA controllers 
 
 To compile the image run:
 
