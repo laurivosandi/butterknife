@@ -12,7 +12,8 @@ if [ -e /var/lib/puppet/ssl/certs/ca.pem ]; then
     cp /var/lib/puppet/ssl/certs/ca.pem /var/lib/persistent/puppet/ssl/certs/ca.pem
 fi
 
-chown puppet:puppet /var/lib/persistent/pupppet
+# Change permissions
+chown puppet:puppet /var/lib/persistent/puppet
 chmod 750 /var/lib/persistent/puppet
 
 # Substitute /var/lib/puppet with symlink to /var/lib/persistent/puppet
