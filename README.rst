@@ -95,10 +95,12 @@ Use butterknife to take a snapshot of the LXC container:
 
     butterknife-release -n your-template
 
-Provisioning using PXE
-----------------------
+
+Serving provisioning image over PXE
+-----------------------------------
 
 PXE is the preferred way of serving the provisioning image.
+In this case Ubuntu/Debian is used to host the provisioning images.
 
 .. code:: bash
 
@@ -107,8 +109,10 @@ PXE is the preferred way of serving the provisioning image.
     cp /usr/lib/syslinux/modules/bios/*.c32 /srv/tftp/
     wget https://butterknife.koodur.com/api/provision/butterknife-i386 \
         -O /srv/tftp/butterknife-i386
-    
-Set up following pxelinux.cfg/default in /srv/tftp:
+    wget https://butterknife.koodur.com/api/provision/butterknife-amd64 \
+        -O /srv/tftp/butterknife-amd64
+
+Set up following in /srv/tftp/pxelinux.cfg/default:
 
 .. code::
 
@@ -140,8 +144,35 @@ Set up following pxelinux.cfg/default in /srv/tftp:
         menu LABEL Butterknife (i386, debug)
         kernel butterknife-i386
         append bk_url=https://butterknife.koodur.com/api/ debug
+        
 
-    
+Setting up PXE boot
+-------------------
+
+If you have OpenWrt based router simply add following to 
+the **config dnsmasq** section of /etc/config/dhcp:
+
+.. code::
+
+    option dhcp_boot 'pxelinux.0,,213.168.13.40'
+
+If running vanilla *dnsmasq*, then simply add following to /etc/dnsmasq.conf:
+
+.. code::
+
+    dhcp-boot=pxelinux.0,,213.168.13.40
+ 
+If you're using MikroTik's WinBox open up your DHCP network configuration and
+set **Next Server** option to 213.168.13.40 and **Boot file name** option to 
+pxelinux.0:
+
+.. figure:: img/mikrotik-pxe-boot.png
+
+    DHCP server settings
+
+If you've set up your own TFTP server as described in the previous
+section substitute 213.168.13.40 with your TFTP server's IP address.
+ 
 Deployment workflow
 -------------------
 
