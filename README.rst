@@ -56,6 +56,13 @@ set up Ubuntu 14.04 container use:
 
     lxc-create -n your-template -B btrfs -t ubuntu -- -r trusty -a i386
 
+Start and enter the container:
+
+.. code:: bash
+
+    lxc-start -d -n your-template
+    lxc-attach -n your-template
+
 Use your favourite configuration management tool to customize the container,
 eg for Puppet users:
 
@@ -88,26 +95,30 @@ Use butterknife to take a snapshot of the LXC container:
 
     butterknife-release -n your-template
 
-Provisioning using PXE
-----------------------
+
+Serving provisioning image over PXE
+-----------------------------------
 
 PXE is the preferred way of serving the provisioning image.
+In this case Ubuntu/Debian is used to host the provisioning images.
 
 .. code:: bash
 
     sudo apt-get install pxelinux
     cp /usr/lib/PXELINUX/pxelinux.0 /srv/tftp/
     cp /usr/lib/syslinux/modules/bios/*.c32 /srv/tftp/
-    wget https://mgmt.koodur.com/api/provision/butterknife-i386 \
+    wget https://butterknife.koodur.com/api/provision/butterknife-i386 \
         -O /srv/tftp/butterknife-i386
-    
-Set up following pxelinux.cfg/default in /srv/tftp:
+    wget https://butterknife.koodur.com/api/provision/butterknife-amd64 \
+        -O /srv/tftp/butterknife-amd64
+
+Set up following in /srv/tftp/pxelinux.cfg/default:
 
 .. code::
 
     default menu.c32
     prompt 0
-    timeout 150
+    timeout 600
     menu title Butterknife provisioning tool
 
     label mbr
@@ -115,16 +126,61 @@ Set up following pxelinux.cfg/default in /srv/tftp:
         localboot 0
 
     label butterknife
-        menu LABEL Butterknife provisioning i386, HTTP-only
+        menu label Deploy edu workstation (i386)
         kernel butterknife-i386
-        append bk_url=https://mgmt.koodur.com/api/ quiet
+        append bk_snapshot=snap34 bk_url=https://butterknife.koodur.com/api/ bk_template=edu-workstation-trusty-i386-template bk_timeserver=2.ubuntu.pool.ntp.org quiet
 
     label butterknife
-        menu label Butterknife provisioning i386, multicast
-        kernel butterknife-i386  
-        append bk_url=https://mgmt.koodur.com/api/ bk_template=edu-workstation-trusty-i386-template bk_snapshot=snap25 quiet
+        menu LABEL Butterknife (i386, HTTP-only)
+        kernel butterknife-i386
+        append bk_url=https://butterknife.koodur.com/api/ quiet
 
-    
+    label butterknife
+        menu LABEL Butterknife (amd64, HTTP-only)
+        kernel butterknife-amd64
+        append bk_url=https://butterknife.koodur.com/api/ quiet
+
+    label butterknife
+        menu LABEL Butterknife (i386, debug)
+        kernel butterknife-i386
+        append bk_url=https://butterknife.koodur.com/api/ debug
+        
+
+Setting up PXE boot
+-------------------
+
+If you're running ISC DHCP server add following to your subnet section
+and restart the service:
+
+.. code::
+
+    next-server 213.168.13.40;
+    filename "pxelinux.0";
+
+If you have OpenWrt based router simply add following to 
+the **config dnsmasq** section of /etc/config/dhcp and restart
+the service:
+
+.. code::
+
+    option dhcp_boot 'pxelinux.0,,213.168.13.40'
+
+If running vanilla *dnsmasq*, then simply add following to /etc/dnsmasq.conf
+and restart the service:
+
+.. code::
+
+    dhcp-boot=pxelinux.0,,213.168.13.40
+ 
+If you're using MikroTik's WinBox open up your DHCP network configuration and
+set **Next Server** option to 213.168.13.40 and **Boot file name** option to 
+pxelinux.0:
+
+.. figure:: img/mikrotik-pxe-boot.png
+
+If you've set up your own TFTP server as described in the previous
+section substitute 213.168.13.40 with your TFTP server's IP address.
+ 
 Deployment workflow
 -------------------
 
