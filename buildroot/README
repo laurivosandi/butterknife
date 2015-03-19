@@ -12,6 +12,11 @@ Steps to reproduce the image:
     patch -p1 < path/to/butterknife/buildroot/patches/ms-sys.diff
     patch -p1 < path/to/butterknife/buildroot/patches/isohybrid.diff
 
+
+
+
+Bump syslinux version to 6.03 and remove the patch
+
 To tweak the build:
 
     make menuconfig
