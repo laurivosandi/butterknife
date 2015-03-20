@@ -1,5 +1,5 @@
 #!/bin/bash
 
 # Unmount persistent directory
-umount /var/lib/persistent
+umount /var/persistent
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PERSISTENT_HOSTNAME="/var/lib/persistent/hostname"
+PERSISTENT_HOSTNAME="/var/persistent/hostname"
 
 # Check if we have hostname in persistent directory
 if [ -e $PERSISTENT_HOSTNAME ]; then
