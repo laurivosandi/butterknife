@@ -1,0 +1,91 @@
+#!/bin/bash
+
+# apt-get install libpam-winbind libnss-winbind samba
+
+DOMAIN=$(dialog --inputbox "Enter domain" 0 0 $bk_domain 2>&1 >/dev/tty | tr '[:upper:]' '[:lower:]')
+REALM=$(echo $DOMAIN | tr '[:lower:]' '[:upper:]')
+WORKGROUP=$(echo $REALM | rev | cut -d . -f 2  | rev)
+USERNAME=$(dialog --inputbox "Enter administrator username" 0 0 Administrator 2>&1 >/dev/tty)
+PASSWORD=$(dialog --insecure --passwordbox "Enter password for $USERNAME@$REALM" 0 0 2>&1 >/dev/tty)
+HOSTNAME=$(cat /etc/hostname)
+
+# Set Kerberos realm
+cat > /etc/krb5.conf << EOF
+[libdefaults]
+dns_lookup_realm = true
+dns_lookup_kdc = true
+default_realm = $REALM
+EOF
+
+# Generate /etc/samba/smb.conf
+cat > /etc/samba/smb.conf <<EOF
+[global]
+security = ads
+netbios name = $HOSTNAME
+workgroup = $WORKGROUP
+realm = $REALM
+disable netbios = yes
+
+dedicated keytab file = /var/persistent/host.keytab
+kerberos method = secrets and keytab
+
+template homedir = /home/%U
+template shell = /bin/bash
+
+idmap config *: range = 1000000-16777216
+idmap config *:backend = rid
+
+winbind nss info = rfc2307
+winbind trusted domains only = no
+winbind use default domain = yes
+winbind enum users  = yes
+winbind enum groups = yes
+winbind refresh tickets = yes
+EOF
+
+net ads join -U $USERNAME%$PASSWORD
+
+
+cat > /etc/pam.d/common-account << EOF
+#%PAM-1.0
+account	required pam_unix.so broken_shadow 
+account	sufficient pam_localuser.so 
+account sufficient pam_succeed_if.so uid < 500 quiet
+account [default=bad success=ok user_unknown=ignore] pam_winbind.so
+account	required pam_permit.so
+EOF
+
+cat > /etc/pam.d/common-auth << EOF
+#%PAM-1.0
+auth sufficient pam_unix.so nullok try_first_pass
+auth requisite pam_succeed_if.so uid >= 500 quiet
+auth sufficient pam_winbind.so use_first_pass
+auth requisite pam_deny.so
+auth optional pam_cap.so
+EOF
+
+cat > /etc/pam.d/common-session << EOF
+#%PAM-1.0
+session	[default=1] pam_permit.so
+session	requisite pam_deny.so
+session	required pam_permit.so
+session	required pam_unix.so
+session	optional pam_systemd.so
+session required pam_mkhomedir.so
+session optional pam_ck_connector.so nox11
+EOF
+
+cat > /etc/pam.d/common-password << EOF
+#%PAM-1.0
+password requisite pam_pwquality.so retry=3
+password sufficient pam_unix.so sha512 shadow nullok try_first_pass use_authtok
+password sufficient pam_winbind.so use_authtok
+password required pam_permit.so
+password optional pam_gnome_keyring.so 
+password requisite pam_deny.so
+EOF
+
+# Set nsswitch
+sed -i -e "s/passwd:/passwd: compat winbind/" /etc/nsswitch.conf
+sed -i -e "s/group:/group: compat winbind/" /etc/nsswitch.conf
+sed -i -e "s/shadow:/shadow: compat/" /etc/nsswitch.conf
