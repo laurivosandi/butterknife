@@ -251,7 +251,7 @@ case $METHOD in
             rm -f /etc/init/sssd.override
         fi
 
-        if [ $START ]; then
+        if [ $RESTART ]; then
             echo "Starting sssd..."
             service sssd start
         else
@@ -267,7 +267,7 @@ case $METHOD in
             rm -f /etc/init/winbind.override
         fi
 
-        if [ $START ]; then
+        if [ $RESTART ]; then
             echo "Starting winbind..."
             service winbind restart
         else
