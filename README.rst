@@ -150,7 +150,7 @@ Setting up PXE boot
 -------------------
 
 If you're running ISC DHCP server add following to your subnet section
-and restart the service:
+in /etc/dhcp/dhcpd.conf and restart the service:
 
 .. code::
 

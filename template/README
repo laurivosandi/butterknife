@@ -28,6 +28,7 @@ Other nice things:
 * Use Dconf to customize defaults and lock down attributes of MATE, XFCE, GNOME, etc desktops
 * Reduce amount of available locales
 * Generate fontconfig cache before template release
+* Instead of /etc/skel use /etc/dconf/db/blah.d/, /etc/firefox, /etc/thunderbird
 * Most importantly de-duplicate work!
 
 If you're planning to install full-blown desktop you should really pick

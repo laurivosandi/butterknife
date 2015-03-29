@@ -403,6 +403,7 @@ case $PARTITIONING_METHOD in
         mount --bind /dev/ $TARGET_MOUNTPOINT/dev/
         mount --bind /sys/ $TARGET_MOUNTPOINT/sys/
         mount --bind /proc/ $TARGET_MOUNTPOINT/proc/
+        mount none $TARGET_MOUNTPOINT/tmp/ -t tmpfs
 
         # Export variables for postinstall scripts
         export BUTTERKNIFE_HOSTNAME=$bk_hostname
@@ -448,6 +449,7 @@ case $PARTITIONING_METHOD in
         umount $TARGET_MOUNTPOINT/dev
         umount $TARGET_MOUNTPOINT/sys
         umount $TARGET_MOUNTPOINT/proc
+        umount $TARGET_MOUNTPOINT/tmp
         umount $TARGET_MOUNTPOINT
 
         echo "Flushing buffers"

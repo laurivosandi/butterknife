@@ -1,0 +1,279 @@
+#!/bin/bash
+
+set -e
+
+if [ -z $BUTTERKNIFE_DOMAIN ] && [ -e /etc/krb5.conf ]; then
+    BUTTERKNIFE_DOMAIN=$(cat /etc/krb5.conf  | grep "^default_realm.*=" | tr '[:upper:]' '[:lower:]' | cut -d '=' -f 2 | xargs)
+fi
+
+DOMAIN=$(dialog --inputbox "Enter domain" 0 0 $BUTTERKNIFE_DOMAIN 2>&1 >$(tty))
+DOMAIN=$(echo $DOMAIN | tr '[:upper:]' '[:lower:]')
+REALM=$(echo $DOMAIN | tr '[:lower:]' '[:upper:]')
+WORKGROUP=$(echo $REALM | rev | cut -d . -f 2  | rev)
+USERNAME=$(dialog --inputbox "Enter username" 0 0 Administrator 2>&1 >$(tty))
+PASSWORD=$(dialog --insecure --passwordbox "Enter password for $USERNAME@$REALM" 0 0 2>&1 >$(tty))
+HOSTNAME=$(cat /etc/hostname)
+
+if [ -x /usr/sbin/sssd ] && [ -x /usr/sbin/winbindd ]; then
+    METHOD=$(dialog --menu "Which subsystem would you like to use" 0 0 0 \
+        sss "System Security Services Daemon" \
+        winbind "Winbind daemon" \
+        skip "Leave PAM config intact" 2>&1 >$(tty))
+elif [ -x /usr/sbin/sssd ]; then
+    METHOD=sssd
+elif [ -x /usr/sbin/winbindd ]; then
+    METHOD=winbind
+else
+    METHOD=skip
+fi
+
+clear
+
+
+##########################
+### Set Kerberos realm ###
+##########################
+
+cat > /etc/krb5.conf << EOF
+[libdefaults]
+default_realm = $REALM
+dns_lookup_realm = true
+dns_lookup_kdc = true
+forwardable = true
+proxiable = true
+EOF
+
+
+####################################
+### Generate /etc/samba/smb.conf ###
+####################################
+
+cat > /etc/samba/smb.conf << EOF
+[global]
+security = ads
+netbios name = $HOSTNAME
+workgroup = $WORKGROUP
+realm = $REALM
+kerberos method = system keytab
+
+# Kill NetBIOS
+disable netbios = yes
+smb ports = 445
+
+# UNIX attribute templates for rid backend
+template homedir = /home/%U
+template shell = /bin/bash
+
+# Reserve 1 000 000 to 16 777 216 for algorithmically generated UID-s
+idmap config *:range = 1000000-16777216
+idmap config *:backend = rid
+
+# Reserve 10 000 to 20 000 for @ID.STIPIT.COM
+idmap config STIPIT:backend = ad
+idmap config STIPIT:schema_mode = rfc2307
+idmap config STIPIT:range = 9999-20000
+
+# libpam-winbind config
+winbind nss info = rfc2307
+winbind trusted domains only = no
+winbind use default domain = yes
+winbind enum users  = no
+winbind enum groups = no
+winbind refresh tickets = yes
+EOF
+
+
+#####################################################
+### This populates keytab and creates secrets.tdb ###
+#####################################################
+
+net ads join -U $USERNAME%$PASSWORD
+
+#################################################
+### Setup LDAP client config and certificates ### 
+#################################################
+
+mkdir -p /etc/ldap/certs
+
+LDAP_CERT=/etc/ldap/$DOMAIN
+LDAP_SRV=$(dig -t SRV _ldap._tcp.$DOMAIN +short | xargs)
+LDAP_PORT=$(echo $LDAP_SRV | cut -d ' ' -f 3)
+LDAP_HOSTNAME=$(echo $LDAP_SRV | cut -d ' ' -f 4)
+LDAP_BASE=$(for j in $(echo $DOMAIN | tr '.' '\n'); do echo dc=$j; done | paste  -s -d ',')
+
+
+if [ ! -e $LDAP_CERT ]; then
+    openssl s_client -showcerts -connect $LDAP_HOSTNAME:636 < /dev/null | openssl x509 > $LDAP_CERT
+fi
+
+cat > /etc/ldap/ldap.conf << EOF
+BASE $LDAP_BASE
+URI ldap://$LDAP_HOSTNAME:$LDAP_PORT ldaps://$LDAP
+TLS_CACERT $LDAP_CERT
+EOF
+
+
+##############################################################################
+### Symlink /etc/sudoers-available.d/$DOMAIN to /etc/sudoers/domain-admins ###
+##############################################################################
+
+rm -f /etc/sudoers.d/domain-admins
+
+if [ -e /etc/sudoers-available.d/$DOMAIN ]; then
+    ln -s /etc/sudoers-available.d/$DOMAIN /etc/sudoers.d/domain-admins
+fi
+
+
+if [ $METHOD == "skip" ]; then
+    exit 0
+fi
+
+##################
+### Set up PAM ###
+##################
+
+cat > /etc/pam.d/common-account << EOF
+#%PAM-1.0
+account	required pam_unix.so broken_shadow
+account sufficient pam_succeed_if.so uid < 1000 quiet
+account [default=bad success=ok user_unknown=ignore] pam_$METHOD.so
+account	required pam_permit.so
+EOF
+
+cat > /etc/pam.d/common-auth << EOF
+#%PAM-1.0
+auth sufficient pam_unix.so nullok try_first_pass
+auth requisite pam_succeed_if.so uid >= 1000 quiet
+auth sufficient pam_$METHOD.so use_first_pass
+auth required pam_deny.so
+auth optional pam_cap.so
+EOF
+
+if [ $METHOD == "winbind" ]; then
+    sed -i -e 's/pam_winbind.so/pam_winbind.so krb5_auth krb5_ccache_type=FILE/' /etc/pam.d/common-auth
+fi
+
+cat > /etc/pam.d/common-session << EOF
+#%PAM-1.0
+session required pam_limits.so
+session required pam_unix.so
+session optional pam_$METHOD.so
+session required pam_mkhomedir.so
+session	optional pam_systemd.so
+session optional pam_ck_connector.so nox11
+session optional pam_umask.so
+EOF
+
+cat > /etc/pam.d/common-password << EOF
+#%PAM-1.0
+password sufficient pam_unix.so sha512 obscure min=4 max=8 nullok try_first_pass
+password sufficient pam_$METHOD.so use_authtok
+password optional pam_gnome_keyring.so 
+password required pam_deny.so
+EOF
+
+##########################
+### Set up SSSD config ###
+##########################
+
+mkdir -p /etc/sssd
+
+cat > /etc/sssd/sssd.conf << EOF
+[sssd]
+services = nss, pam
+config_file_version = 2
+domains = $DOMAIN
+
+[nss]
+
+[pam]
+
+[domain/$DOMAIN]
+id_provider = ad
+auth_provider = ad
+access_provider = ad
+chpass_provider = ad
+sudo_provider = ad
+cache_credentials = true
+dyndns_update = false
+krb5_use_enterprise_principal = false
+EOF
+
+chmod 0600 /etc/sssd/sssd.conf
+
+if [ $DOMAIN == "id.stipit.com" ]; then
+    echo "ldap_id_mapping = false" >> /etc/sssd/sssd.conf
+fi
+
+# Set nsswitch
+sed -i -e "s/^passwd:.*/passwd: compat $METHOD/" /etc/nsswitch.conf
+sed -i -e "s/^group:.*/group: compat $METHOD/" /etc/nsswitch.conf
+sed -i -e "s/^shadow:.*/shadow: compat/" /etc/nsswitch.conf
+
+set +e
+
+if [ -e /run/samba/winbindd.pid ] || [ -e /run/sssd.pid ]; then
+    RESTART=yes
+fi
+
+#####################
+### Stop services ###
+#####################
+
+service smbd stop
+service nmbd stop
+service winbind stop
+service sssd stop
+
+####################
+### Purge caches ###
+####################
+
+net cache flush
+rm -f /var/lib/sss/db/*
+rm -f /var/lib/samba/*.tdb
+rm -f /var/lib/samba/group_mapping.ldb
+
+
+######################
+### Start services ###
+######################
+
+service smb start
+
+case $METHOD in
+   sss)
+        update-rc.d -f winbind remove
+        update-rc.d sssd defaults
+        
+        if [ -d /etc/init ]; then
+            echo manual > /etc/init/winbind.override
+            rm -f /etc/init/sssd.override
+        fi
+
+        if [ $START ]; then
+            echo "Starting sssd..."
+            service sssd start
+        else
+            echo "Warning: sssd is not running..."
+        fi
+    ;;
+    winbind)
+        update-rc.d -f sssd remove
+        update-rc.d winbind defaults
+
+        if [ -d /etc/init ]; then
+            echo manual > /etc/init/sssd.override
+            rm -f /etc/init/winbind.override
+        fi
+
+        if [ $START ]; then
+            echo "Starting winbind..."
+            service winbind restart
+        else
+            echo "Warning: winbind is not running!"
+        fi
+
+    ;;
+esac
+
