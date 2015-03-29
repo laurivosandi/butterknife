@@ -31,6 +31,7 @@ fi
 while [ 1 ]; do
     dialog --menu "What do you want to do" 0 0 0 \
         provision       "Provision this machine" \
+        enter           "Enter deployment" \
         shell           "Drop to shell" \
         reboot          "Reboot" \
         poweroff        "Shutdown" 2> /tmp/what_next

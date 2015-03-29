@@ -16,6 +16,7 @@ POOL_DEPLOYMENTS=$POOL_MOUNTPOINT/deployments
 TARGET_MOUNTPOINT=/mnt/target
 
 AGENT="Butterknife-Provisioning-Image/0.1"
+URL_LOCAL=http://butterknife
 
 # Clean up mess from interrupted snapshot retrieval
 if [ -f $POOL_TEMPLATES/dirty ]; then
@@ -46,13 +47,13 @@ set -e # Bail on error
 #######################################
 
 if [ -z $bk_template ] || [ -z $bk_snapshot ]; then
-    echo "http" > /tmp/transfer_method
+    TRANSFER_METHOD="http"
 else
-    dialog --menu "Select transfer method" 0 0 0 \
+    TRANSFER_METHOD=$(dialog --menu "Select transfer method" 0 0 0 \
         http "HTTP-only" \
         multicast "Multicast receive" \
         tee "Multicast via HTTP and write" \
-        proxy "Only proxy HTTP to multicast" 2>/tmp/transfer_method
+        proxy "Only proxy HTTP to multicast" 2>&1 >$(tty))
 fi
 
 
@@ -60,7 +61,7 @@ fi
 ### Harddisk preparation phase ###
 ##################################
 
-case $(cat /tmp/transfer_method) in
+case $TRANSFER_METHOD in
     http|multicast|tee)
         #############################
         ### Target disk selection ###
@@ -81,7 +82,7 @@ case $(cat /tmp/transfer_method) in
                 if [ "$sector_count" == "0" ]; then
                     continue
                 fi
-                size=$(($sector_count / 1000000 \* $sector_size / 1000))G
+                size=$(expr $sector_count / 1000000 \* $sector_size / 1000)G
                 echo "$slug \"$(cat $disk/device/model | xargs) ($size)\"";
             fi
         done > /tmp/disks
@@ -94,22 +95,33 @@ case $(cat /tmp/transfer_method) in
         DISK_SLUG=$(cat /tmp/selected_disk)
         DISK=/dev/$DISK_SLUG
 
-        dialog --menu "Partitioning $DISK" 0 0 0 \
+        PARTITIONING_METHOD=$(dialog --menu "Partitioning $DISK" 0 0 0 \
             purge           "Overwrite whole disk" \
             reformat        "Reformat partition" \
             unpartitioned   "Use unpartitioned area" \
+            resize          "Resize last partition" \
             receive         "Receive into existing btrfs filesystem" \
-            2> /tmp/partitioning_method
+            2>&1 >$(tty))
 
         # TODO: deploy          "Deploy received template" \
         # TODO: postinstall     "Run postinstall scripts (reinstall GRUB)" \
 
         # TODO: EFI way is not currently covered!
-        case $(cat /tmp/partitioning_method) in
+        case $PARTITIONING_METHOD in
             unpartitioned)
                 clear 
                 echo "Attempting to create new partition in unpartitioned space"
                 echo -e "n\np\n\n\n\nw" | fdisk $DISK
+            ;;
+            resize)
+                clear
+                LAST_PARTITION=$(ls $DISK? | tail -n 1)
+                SIZE="260G"
+                ntfsresize -s $SIZE $LAST_PARTITION
+                echo -e "d\n\nw" | fdisk $DISK # Remove last partition
+                echo -e "n\np\n\n\n+$SIZE\nt\n\n7\nw" | fdisk $DISK # Re-create NTFS
+#                ntfsresize -f $LAST_PARTITION
+                echo -e "n\np\n\n\n\nw" | fdisk $DISK # Create partition for btrfs
             ;;
             purge)
                 clear
@@ -118,30 +130,46 @@ case $(cat /tmp/transfer_method) in
             ;;
         esac
 
-        ########################################
-        ### Target partition selection phase ###
-        ########################################
-        for partition in $DISK?; do
-            partition_slug=$(echo $partition | cut -d "/" -f 3)
-            sector_count=$(cat /sys/block/$DISK_SLUG/$partition_slug/size)
-            sector_size=$(cat /sys/block/$DISK_SLUG/queue/hw_sector_size)
-            size=$(($sector_count / 1000000 \* $sector_size / 1000))G
-            if [ $size == "0G" ]; then
-                size=$(($sector_count / 1000 \* $sector_size / 1000))M
-            fi
-            echo "$partition \"$size\"";
-        done > /tmp/partitions
 
-        dialog \
-            --menu "Target partition" 0 0 0 \
-            --file /tmp/partitions \
-            2> /tmp/selected_partition
+        ############################################
+        ### Target partition determination phase ###
+        ############################################
+        case $PARTITIONING_METHOD in
+            reformat|receive)
+                # Dialog to select partition for reformat or receive
+                for partition in $DISK?; do
+                    partition_slug=$(echo $partition | cut -d "/" -f 3)
+                    sector_count=$(cat /sys/block/$DISK_SLUG/$partition_slug/size)
+                    sector_size=$(cat /sys/block/$DISK_SLUG/queue/hw_sector_size)
+                    size=$(expr $sector_count / 1000000 \* $sector_size / 1000)G
+                    if [ $size == "0G" ]; then
+                        size=$(expr $sector_count / 1000 \* $sector_size / 1000)M
+                    fi
+                    echo "$partition \"$size\"";
+                done > /tmp/partitions
 
-        PARTITION=$(cat /tmp/selected_partition)
+                PARTITION=$(dialog \
+                    --menu "Target partition" 0 0 0 \
+                    --file /tmp/partitions \
+                    2>&1 >$(tty))
+            ;;
+            unpartitioned|resize|purge)
+                # Assume last partition
+                PARTITION=$(ls $DISK? | tail -n 1)
+            ;;
+            *)
+                PARTITION=/dev/null
+            ;;
+        esac
+
         PARTITION_SLUG=$(echo $PARTITION | cut -d "/" -f 3)
 
-        case $(cat /tmp/partitioning_method) in
-            purge|reformat|unpartitioned) 
+
+        ########################################
+        ### Target filesystem creation phase ###
+        ########################################
+        case $PARTITIONING_METHOD in
+            purge|reformat|unpartitioned|resize) 
                 clear
                 echo "Creating clean btrfs filesystem on $PARTITON"
                 mkfs.btrfs -f $PARTITION
@@ -160,7 +188,7 @@ case $(cat /tmp/transfer_method) in
         fi
     ;;
     *)
-        echo "pass" > /tmp/partitioning_method
+        PARTITIONING_METHOD="pass"
     ;;
 esac
 
@@ -168,12 +196,16 @@ esac
 ### Server selection phase ###
 ##############################
 if [ -z $bk_url ]; then
-    case $(cat /tmp/transfer_method) in
+    case $TRANSFER_METHOD in
         http|tee|proxy)
-            dialog --menu "Select server" 0 0 0 \
-                http://butterknife      "Local server" \
-                https://butterknife.koodur.com "Koodur LLC" 2>/tmp/server_hostname
-            bk_url="$(cat /tmp/server_hostname)/api"
+            bk_url=$(dialog --menu "Select server" 0 0 0 \
+                $URL_LOCAL/api/                       "Use local or manually enter" \
+                https://butterknife.koodur.com/api/   "Koodur LLC" 2>&1 >$(tty))
+                
+            if [ "$bk_url" == $URL_LOCAL ]; then
+                bk_url=$(dialog --inputbox "Use local instance or customize URL" \
+                    0 0 $URL_LOCAL 2>&1 >$(tty))
+            fi
         ;;
     esac
 fi
@@ -182,7 +214,7 @@ fi
 ### Template selection phase ###
 ################################
 if [ -z $bk_template ]; then
-    case $(cat /tmp/transfer_method) in
+    case $TRANSFER_METHOD in
         local)
             echo "" > /tmp/available_templates
             for i in $(ls $POOL_TEMPLATES); do
@@ -197,18 +229,17 @@ if [ -z $bk_template ]; then
         ;;
     esac
 
-    dialog \
+    bk_template=$(dialog \
         --menu "Select template to deploy" 0 0 0 \
         --file /tmp/available_templates \
-        2>/tmp/selected_template
-    bk_template=$(cat /tmp/selected_template)
+        2>&1 >$(tty))
 fi
 
 ################################
 ### Snapshot selection phase ###
 ################################
 if [ -z $bk_snapshot ]; then
-    case $(cat /tmp/transfer_method) in
+    case $TRANSFER_METHOD in
         http|tee|proxy|multicast)
             # Fetch snapshot list
             curl -A $AGENT -s $bk_url/container/$bk_template/snapshot/ \
@@ -229,16 +260,14 @@ if [ -z $bk_snapshot ]; then
     esac
 
 
-    case $(cat /tmp/transfer_method) in
+    case $TRANSFER_METHOD in
         http|tee|proxy|local|multicast)
-            dialog \
+            bk_snapshot=$(dialog \
                 --menu "Select snapshot to deploy" 0 0 0 \
                 --file /tmp/available_snapshots \
-                2>/tmp/selected_snapshot
+                2>&1 >$(tty))
         ;;
     esac
-
-    bk_snapshot=$(cat /tmp/selected_snapshot)
 fi
 
 bk_template_subvol=templates/$bk_template/$bk_snapshot/
@@ -251,18 +280,17 @@ clear
 FIRST_INTERFACE=$(ls /sys/class/net/ | grep -v '^lo$' | head -n 1)
 MAC=$(cat /sys/class/net/$FIRST_INTERFACE/address | sed -e 's/://g')
 
-case $(cat /tmp/partitioning_method) in
+case $PARTITIONING_METHOD in
     receive|pass)
         echo "Skipping setting hostname"
     ;;
     *)
         case $bk_hostname_policy in
             auto)
-                bk_hostname="host-$MAC"
+                bk_hostname="bk-$MAC" # Maximum of 15 characters due to MS legacy
             ;;
             *)
-                dialog --inputbox "Enter hostname" 0 0 "host-$MAC" 2> /tmp/hostname
-                bk_hostname=$(cat /tmp/hostname)
+                bk_hostname=$(dialog --inputbox "Enter hostname" 0 0 "host-$MAC" 2>&1 >$(tty))
             ;;
         esac
     ;;
@@ -272,7 +300,7 @@ esac
 ### Stream URL construction phase ###
 #####################################
 
-case $(cat /tmp/transfer_method) in
+case $TRANSFER_METHOD in
     http|tee|proxy)
         # Build btrfs-stream URL
         STREAM="$bk_url/container/$bk_template/snapshot/$bk_snapshot/stream?src="
@@ -284,7 +312,7 @@ esac
 ### Allow differential snapshots using HTTP ###
 ###############################################
 
-case $(cat /tmp/transfer_method) in
+case $TRANSFER_METHOD in
     http)
         # Determine differential snapshot parents
         if [ -d $POOL_TEMPLATES/$bk_template ]; then
@@ -313,7 +341,7 @@ esac
 ### Transfer phase ###
 ######################
 
-case $(cat /tmp/transfer_method) in
+case $TRANSFER_METHOD in
     multicast)
         mkdir -p $POOL_MOUNTPOINT/$bk_template_subvol
         udp-receiver --nokbd \
@@ -347,7 +375,7 @@ esac
 
 sync
 
-case $(cat /tmp/partitioning_method) in
+case $PARTITIONING_METHOD in
     pass)
         echo "Skipping template deployment"
     ;;
@@ -384,11 +412,36 @@ case $(cat /tmp/partitioning_method) in
         export BUTTERKNIFE_PARTITION=$PARTITION
         export BUTTERKNIFE_DISK=$DISK
         export BUTTERKNIFE_POOL_MOUNTPOINT=$POOL_MOUNTPOINT
+        export BUTTERKNIFE_PARTITIONING_METHOD=$PARTITIONING_METHOD # One of purge,reformat,unpartitionied,resize,receive
+        export BUTTERKNIFE_TRANSFER_METHOD=$TRANSFER_METHOD # One of multicast,http,tee
         export BUTTERKNIFE_POOL_UUID=$(blkid -s UUID -o value $PARTITION)
         export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
         # Run postinstall scripts, presumably in sorted order
         chroot $TARGET_MOUNTPOINT butterknife-postdeploy
+        
+        case $PARTITIONING_METHOD in
+            receive)
+                echo "Skipping GRUB install"
+            ;;
+            *)
+                case $bk_grub_method in
+                    none)
+                        echo "Skipping GRUB install"
+                    ;;
+                    volume)
+                        chroot $TARGET_MOUNTPOINT grub-install $BUTTERKNIFE_DISK
+                    ;;
+                    both)
+                        chroot $TARGET_MOUNTPOINT grub-install $BUTTERKNIFE_DISK
+                        chroot $TARGET_MOUNTPOINT grub-install $BUTTERKNIFE_DISK
+                    ;;
+                    *)
+                        chroot $TARGET_MOUNTPOINT grub-install $BUTTERKNIFE_DISK
+                    ;;
+                esac
+            ;;
+        esac
 
         # Unmount directories
         umount $TARGET_MOUNTPOINT/mnt/pool
