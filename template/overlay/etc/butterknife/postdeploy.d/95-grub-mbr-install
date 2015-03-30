@@ -1,3 +1,0 @@
-#!/bin/bash
-echo "Installing GRUB to $BUTTERKNIFE_DISK"
-grub-install $BUTTERKNIFE_DISK

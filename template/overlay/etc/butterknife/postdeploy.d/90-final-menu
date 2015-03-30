@@ -1,0 +1,40 @@
+#!/bin/bash
+
+while :
+do
+    action=$(dialog --menu "Deployment is almost finished, what next?" 0 0 0 \
+        mbr "Install bootloader and reboot" \
+        reboot "Skip bootloader and reboot" \
+        hostname "Change hostname $(cat /etc/hostname)" \
+        join "Join domain" \
+        useradd "Create local user" \
+        shell "Drop to shell" \
+        vbr "Install bootloader to volume boot record" 2>&1 >$(tty))
+    clear
+    
+    case $action in
+        mbr)
+            grub-install $BUTTERKNIFE_DISK
+            exit 0
+        ;;
+        vbr)
+            grub-install $BUTTERKNIFE_PARTITION
+        ;;
+        reboot)
+            exit 0
+        ;;
+        join)
+            butterknife-join-domain
+        ;;
+        hostname)
+            butterknife-change-hostname
+        ;;
+        useradd)
+            butterknife-create-local-user
+        ;;
+        shell)
+            bash
+        ;;
+    esac
+done
+

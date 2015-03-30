@@ -5,20 +5,20 @@ if [ ! -x /usr/bin/puppet ]; then
     exit 0
 fi
 
-mkdir -p /var/persistent/puppet/ssl/certs/
+mkdir -p /var/butterknife/persistent/puppet/ssl/certs/
 
 if [ -e /var/lib/puppet/ssl/certs/ca.pem ]; then
     echo "Copying Puppet CA certificate ..."
-    cp /var/lib/puppet/ssl/certs/ca.pem /var/persistent/puppet/ssl/certs/ca.pem
+    cp /var/lib/puppet/ssl/certs/ca.pem /var/butterknife/persistent/puppet/ssl/certs/ca.pem
 fi
 
 # Change permissions
-chown puppet:puppet /var/persistent/puppet
-chmod 750 /var/persistent/puppet
+chown puppet:puppet /var/butterknife/persistent/puppet
+chmod 750 /var/butterknife/persistent/puppet
 
-# Substitute /var/lib/puppet with symlink to /var/persistent/puppet
+# Substitute /var/lib/puppet with symlink to /var/butterknife/persistent/puppet
 rm -Rf /var/lib/puppet
-ln -s /var/persistent/puppet /var/lib/puppet
+ln -s /var/butterknife/persistent/puppet /var/lib/puppet
 
 puppet agent --enable
 

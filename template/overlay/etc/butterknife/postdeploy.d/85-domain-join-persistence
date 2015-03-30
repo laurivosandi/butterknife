@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# Make domain join persistent
+if [ ! -d /var/butterknife/persistent ]; then
+    echo "Warning: /var/butterknife/persistent does not exist, domain join persistence not enabled"
+    exit 0
+fi
+
+if [ -h /etc/krb5.keytab ]; then
+    echo "Symlink /etc/krb5.keytab already exists, skipping creation..."
+else
+    echo "Symlinking /etc/krb5.keytab to /var/butterknife/persistent/host.keytab"
+    rm -f /etc/krb5.keytab /var/butterknife/persistent/host.keytab
+     # Create empty keytab, otherwise net ads join hiccups
+    echo -e "\0005\0002\c" > /var/butterknife/persistent/host.keytab
+    ln -s /var/butterknife/persistent/host.keytab /etc/krb5.keytab
+fi
+
+# Create /var/lib/samba/private/secrets.tdb symlink if necessary
+#    if [ -h /var/lib/samba/private/secrets.tdb ]; then
+#        echo "Symlink /var/lib/samba/private/secrets.tdb already exists, skipping creation..."
+#    else
+#        echo "Symlinking /var/lib/samba/private/secrets.tdb to /var/butterknife/persistent/secrets.tdb"
+#        rm -f /var/lib/samba/private/secrets.tdb /var/butterknife/persistent/secrets.tdb
+#        ln -s /var/butterknife/persistent/secrets.tdb /var/lib/samba/private/secrets.tdb
+#    fi
+
+# Create /etc/samba/smb.conf symlink if necessary
+if [ -h /etc/samba/smb.conf ]; then
+    echo "Symlink /etc/samba/smb.conf already exists, skipping creation..."
+else
+    echo "Symlinking /etc/samba/smb.conf to /var/butterknife/persistent/smb.conf"
+    if [ -e /etc/samba/smb.conf ]; then
+        mv /etc/samba/smb.conf /var/butterknife/persistent/smb.conf
+    fi
+    ln -s /var/butterknife/persistent/smb.conf /etc/samba/smb.conf
+fi
+
+# Create /etc/krb5.conf symlink if necessary
+if [ -h /etc/krb5.conf ]; then
+    echo "Symlink /etc/krb5.conf already exists, skipping creation..."
+else
+    echo "Symlinking /etc/krb5.conf to /var/butterknife/persistent/krb5.conf"
+    if [ -e /etc/krb5.conf ]; then
+        mv /etc/krb5.conf /var/butterknife/persistent/krb5.conf
+    fi
+    ln -s /var/butterknife/persistent/krb5.conf /etc/krb5.conf
+fi
+
+# Symlink PAM config
+mkdir -p /var/butterknife/persistent/pam.d
+for $facility in common-account common-auth common-session common-password; do
+    if [ -h /etc/pam.d/$facility ]; then
+        echo "Symlink /etc/pam.d/$facility already exists, skipping creation..."
+    else
+        echo "Symlinking /etc/pam.d/$facility to /var/butterknife/persistent/pam.d/$facility"
+        if [ -e /etc/pam.d/$facility ]; then
+            mv /etc/pam.d/$facility /var/butterknife/persistent/pam.d/$facility
+        fi
+        ln -s /var/butterknife/persistent/pam.d/$facility /etc/pam.d/$facility
+    fi
+done
+

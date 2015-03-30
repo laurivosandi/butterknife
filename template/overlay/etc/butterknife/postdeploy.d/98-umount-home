@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# Unmount persistent directory
+umount /home

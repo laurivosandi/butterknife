@@ -1,0 +1,22 @@
+#!/bin/sh
+
+set -e
+
+if [ -z $1 ]; then
+    if [ -e /var/butterknife/persistent/hostname ]; then
+        CURRENT=$(cat /var/butterknife/persistent/hostname)
+    else
+        CURRENT=$(cat /etc/hostname)
+    fi
+    NEW=$(dialog --max-input 15 --inputbox "Enter hostname" 0 0 "$CURRENT" 2>&1 >$(tty))
+else
+    NEW=$1
+fi
+
+if [ -d /var/butterknife/persistent ]; then
+    echo $NEW > /var/butterknife/persistent/hostname
+fi
+
+echo $NEW > /etc/hostname
+sed -i -e "s/127\.0\.1\.1.*$/127.0.1.1 $NEW/g" /etc/hosts
+

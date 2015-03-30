@@ -1,0 +1,14 @@
+#!/bin/bash
+
+if [ -d /var/butterknife/persistent ]; then
+    if [ -e /var/butterknife/persistent/hostname ]; then
+        butterknife-change-hostname $(cat /var/butterknife/persistent/hostname)
+        exit 0
+    fi
+fi
+
+FIRST_INTERFACE=$(ls /sys/class/net/ | grep -v '^lo$' | head -n 1)
+MAC=$(cat /sys/class/net/$FIRST_INTERFACE/address | sed -e 's/://g')
+
+butterknife-change-hostname bk-$MAC
+

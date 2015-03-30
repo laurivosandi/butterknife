@@ -29,6 +29,7 @@ fi
 
 clear
 
+echo "Joining machine $HOSTNAME to domain $DOMAIN..."
 
 ##########################
 ### Set Kerberos realm ###
@@ -186,6 +187,8 @@ config_file_version = 2
 domains = $DOMAIN
 
 [nss]
+fallback_homedir = /home/%u
+override_shell = /bin/bash
 
 [pam]
 
@@ -278,3 +281,4 @@ case $METHOD in
     ;;
 esac
 
+read -p "Press [Enter] to continue..."
