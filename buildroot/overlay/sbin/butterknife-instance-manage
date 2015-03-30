@@ -1,0 +1,19 @@
+#!/bin/sh
+
+set -e
+
+instance_filesystem=$(butterknife-select-btrfs-filesystem 2>&1 >$(tty))
+instance_name=$(butterknife-instance-select $instance_filesystem 2>&1 >$(tty))
+
+action=$(dialog --menu "What next?" 0 0 0 \
+    enter "Enter root filesystem instance" \
+    delete "Delete root filesystem instance" 2>&1 >$(tty))
+
+case $action in
+    enter)
+        butterknife-instance-enter $instance_filesystem $instance_name
+    ;;
+    delete)
+        butterknife-instance-delete $instance_filesystem $instance_name
+    ;;
+esac

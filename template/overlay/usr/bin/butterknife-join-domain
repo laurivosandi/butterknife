@@ -80,6 +80,7 @@ winbind use default domain = yes
 winbind enum users  = no
 winbind enum groups = no
 winbind refresh tickets = yes
+client ldap sasl wrapping = seal
 EOF
 
 

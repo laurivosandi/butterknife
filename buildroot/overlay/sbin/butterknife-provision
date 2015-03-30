@@ -3,7 +3,7 @@
 # This script parses following arguments from /proc/cmdline:
 #   - bk_url=https://mgmt.koodur.com/api
 #   - bk_template=your-template
-#   - bk_snapshot=snap9
+#   - bk_version=snap9
 #   - bk_domain=32kk.lan
 
 # TODO: Make sure fdisk from busybox is NOT used, it's counting sectors incorrectly (?!)
@@ -46,7 +46,7 @@ set -e # Bail on error
 ### Transfer method selection phase ###
 #######################################
 
-if [ -z $bk_template ] || [ -z $bk_snapshot ]; then
+if [ -z $bk_template ] || [ -z $bk_version ]; then
     TRANSFER_METHOD="http"
 else
     TRANSFER_METHOD=$(dialog --menu "Select transfer method" 0 0 0 \
@@ -128,6 +128,13 @@ case $TRANSFER_METHOD in
                 echo "Purging whole disk"
                 echo -e "o\nn\np\n\n\n\nw" | fdisk $DISK
             ;;
+            reformat|receive)
+                # NOOP
+            ;;
+            *)
+                echo "Invalid partitioning method $PARTITIONING_METHOD"
+                exit 255
+            ;;
         esac
 
 
@@ -158,7 +165,8 @@ case $TRANSFER_METHOD in
                 PARTITION=$(ls $DISK? | tail -n 1)
             ;;
             *)
-                PARTITION=/dev/null
+                echo "Invalid partitioning method $PARTITIONING_METHOD"
+                exit 255
             ;;
         esac
 
@@ -179,13 +187,25 @@ case $TRANSFER_METHOD in
         # Attempt to mount target directory
         mkdir -p $POOL_MOUNTPOINT
         mount $PARTITION $POOL_MOUNTPOINT -o subvol=/
-        mkdir -p $POOL_TEMPLATES
-        mkdir -p $POOL_DEPLOYMENTS
-
+        
         if [ $? -ne 0 ]; then
             dialog --msgbox "Mounting $PARTITION at $POOL_MOUNTPOINT failed, are you sure kernel has btrfs support built-in?" 0 0
             exit 255
         fi
+        
+        ################
+        ### Clean up ###
+        ################
+
+        set +e
+        for subvol in $(ls $POOL_MOUNTPOINT | grep "^@template:"); do
+            touch $POOL_MOUNTPOINT/$subvol/.test
+            if [ $? -eq 0 ]; then
+                btrfs subvol delete $POOL_MOUNTPOINT/$subvol
+            fi
+        done
+        set -e
+        
     ;;
     *)
         PARTITIONING_METHOD="pass"
@@ -216,15 +236,13 @@ fi
 if [ -z $bk_template ]; then
     case $TRANSFER_METHOD in
         local)
-            echo "" > /tmp/available_templates
-            for i in $(ls $POOL_TEMPLATES); do
-                echo "$i \"$i\"" >> /tmp/available_templates
-            done
+            # NOT IMPLEMENTED
+            exit 255
         ;;
         *)
             # Fetch template list
-            curl -A $AGENT -s $bk_url/container/ \
-                | jq '.containers[] | .name + " \"" + .description + "\""' -r \
+            curl -A $AGENT -s $bk_url/template/ \
+                | jq '.templates[] | .namespace + "." + .identifier + " \"" + .description + "\""' -r \
                 > /tmp/available_templates
         ;;
     esac
@@ -233,68 +251,48 @@ if [ -z $bk_template ]; then
         --menu "Select template to deploy" 0 0 0 \
         --file /tmp/available_templates \
         2>&1 >$(tty))
+
 fi
 
-################################
-### Snapshot selection phase ###
-################################
-if [ -z $bk_snapshot ]; then
+if [ -z $bk_arch ]; then
+    bk_arch=x86
+fi
+
+###############################
+### Version selection phase ###
+###############################
+if [ -z $bk_version ]; then
     case $TRANSFER_METHOD in
         http|tee|proxy|multicast)
-            # Fetch snapshot list
-            curl -A $AGENT -s $bk_url/container/$bk_template/snapshot/ \
-                > /tmp/available_snapshots.json        
+            # Fetch version list
+            curl -A $AGENT -s $bk_url/template/$bk_template/arch/$bk_arch/version/ \
+                > /tmp/available_versions.json        
 
-            cat /tmp/available_snapshots.json \
-                | jq '.snapshots[] | .name+" \""+.comment + "\""' -r \
+            cat /tmp/available_versions.json \
+                | jq '.versions[] | .identifier + " \"" + .comment + "\""' -r \
                 | head -n 100 \
-                > /tmp/available_snapshots
+                > /tmp/available_versions
         ;;
         local)
-            # List local snapshots
-            echo "" > /tmp/available_snapshots
-            for i in $(ls $POOL_TEMPLATES/$bk_template); do
-                echo "$i \"$i\"" >> /tmp/available_snapshots
-            done
+            # NOT IMPLEMENTED
+            exit 255
         ;;
     esac
 
 
     case $TRANSFER_METHOD in
         http|tee|proxy|local|multicast)
-            bk_snapshot=$(dialog \
-                --menu "Select snapshot to deploy" 0 0 0 \
-                --file /tmp/available_snapshots \
+            bk_version=$(dialog \
+                --menu "Select version to deploy" 0 0 0 \
+                --file /tmp/available_versions \
                 2>&1 >$(tty))
         ;;
     esac
 fi
 
-bk_template_subvol=templates/$bk_template/$bk_snapshot/
+bk_template_subvol="@template:$bk_template:$bk_arch:$bk_version"
+
 clear
-
-######################
-### Hostname input ###
-######################
-
-FIRST_INTERFACE=$(ls /sys/class/net/ | grep -v '^lo$' | head -n 1)
-MAC=$(cat /sys/class/net/$FIRST_INTERFACE/address | sed -e 's/://g')
-
-case $PARTITIONING_METHOD in
-    receive|pass)
-        echo "Skipping setting hostname"
-    ;;
-    *)
-        case $bk_hostname_policy in
-            auto)
-                bk_hostname="bk-$MAC" # Maximum of 15 characters due to MS legacy
-            ;;
-            *)
-                bk_hostname=$(dialog --inputbox "Enter hostname" 0 0 "host-$MAC" 2>&1 >$(tty))
-            ;;
-        esac
-    ;;
-esac
 
 #####################################
 ### Stream URL construction phase ###
@@ -303,31 +301,26 @@ esac
 case $TRANSFER_METHOD in
     http|tee|proxy)
         # Build btrfs-stream URL
-        STREAM="$bk_url/container/$bk_template/snapshot/$bk_snapshot/stream?src="
+        STREAM="$bk_url/template/$bk_template/arch/$bk_arch/version/$bk_version/stream?src="
     ;;
 esac
 
-
-###############################################
-### Allow differential snapshots using HTTP ###
-###############################################
+##############################################
+### Allow differential versions using HTTP ###
+##############################################
 
 case $TRANSFER_METHOD in
     http)
-        # Determine differential snapshot parents
-        if [ -d $POOL_TEMPLATES/$bk_template ]; then
-            cat /tmp/available_snapshots.json | jq -r '.snapshots[] .name' > /tmp/available_snapshot_names
-            ls $POOL_TEMPLATES/$bk_template > /tmp/local_snapshot_names
-            cat /tmp/local_snapshot_names /tmp/available_snapshot_names > /tmp/merged_snapshot_names
+        # Determine differential version parents
+        cat /tmp/available_versions.json | jq -r '.versions[] .identifier' > /tmp/available_version_names
+        ls $POOL_MOUNTPOINT | grep "^@template:$bk_template:$bk_arch:" | cut -d ":" -f 4 > /tmp/local_version_names
+        cat /tmp/local_version_names /tmp/available_version_names > /tmp/merged_version_names
 
-            PARENTS=$(cat /tmp/merged_snapshot_names | sort | grep -v $bk_snapshot | uniq -d)
-            echo "Snapshot parents are: $PARENTS"
-            for parent in $PARENTS; do
-                STREAM="$STREAM$parent,"
-            done
-        else
-            echo "Differential update not possible, because no snapshot parents available locally. Falling back to full snapshot"
-        fi
+        PARENTS=$(cat /tmp/merged_version_names | sort | grep -v $bk_version | uniq -d)
+        echo "version parents are: $PARENTS"
+        for parent in $PARENTS; do
+            STREAM="$STREAM$parent,"
+        done
 
         echo "Final URL is $STREAM"
     ;;
@@ -343,22 +336,19 @@ esac
 
 case $TRANSFER_METHOD in
     multicast)
-        mkdir -p $POOL_MOUNTPOINT/$bk_template_subvol
         udp-receiver --nokbd \
             | zcat \
-            | btrfs receive $POOL_MOUNTPOINT/$bk_template_subvol
+            | btrfs receive $POOL_MOUNTPOINT/
     ;;
     http)
-        mkdir -p $POOL_MOUNTPOINT/$bk_template_subvol
         curl -A $AGENT $STREAM \
             | zcat \
-            | btrfs receive $POOL_MOUNTPOINT/$bk_template_subvol
+            | btrfs receive $POOL_MOUNTPOINT/
     ;;
     tee)
-        mkdir -p $POOL_MOUNTPOINT/$bk_template_subvol
         dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
         mkfifo /tmp/multicast_stream /tmp/local_stream
-        zcat /tmp/local_stream | btrfs receive $POOL_MOUNTPOINT/$bk_template_subvol &
+        zcat /tmp/local_stream | btrfs receive $POOL_MOUNTPOINT/ &
         sleep 1
         udp-sender --nokbd --no-progress --min-receivers 1 --min-wait 5 /tmp/multicast_stream &
         sleep 1
@@ -384,8 +374,13 @@ case $PARTITIONING_METHOD in
         ### Template deployment phase ###
         #################################
         
-        bk_deploy_subvol="deployments/$(date '+%Y-%m-%d_%H:%M:%S')"
-        btrfs subvolume snapshot $POOL_MOUNTPOINT/$bk_template_subvol/* "$POOL_MOUNTPOINT/$bk_deploy_subvol"
+        bk_deploy_subvol="@root:$bk_template:$bk_arch:$bk_version"
+        btrfs subvolume snapshot $POOL_MOUNTPOINT/$bk_template_subvol "$POOL_MOUNTPOINT/$bk_deploy_subvol"
+        
+        # Symlink @root:active to current deployment subvol
+        rm -f $POOL_MOUNTPOINT/@root:active
+        ln -s $bk_deploy_subvol $POOL_MOUNTPOINT/@root:active
+        
 
         ###############################
         ### Run post-deploy scripts ###
@@ -406,7 +401,6 @@ case $PARTITIONING_METHOD in
         mount none $TARGET_MOUNTPOINT/tmp/ -t tmpfs
 
         # Export variables for postinstall scripts
-        export BUTTERKNIFE_HOSTNAME=$bk_hostname
         export BUTTERKNIFE_DOMAIN=$bk_domain
         export BUTTERKNIFE_TEMPLATE_SUBVOL=$bk_template_subvol
         export BUTTERKNIFE_DEPLOY_SUBVOL=$bk_deploy_subvol
@@ -417,32 +411,12 @@ case $PARTITIONING_METHOD in
         export BUTTERKNIFE_TRANSFER_METHOD=$TRANSFER_METHOD # One of multicast,http,tee
         export BUTTERKNIFE_POOL_UUID=$(blkid -s UUID -o value $PARTITION)
         export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        
+        # Copy DNS config
+        cat /etc/resolv.conf > $TARGET_MOUNTPOINT/etc/resolv.conf
 
         # Run postinstall scripts, presumably in sorted order
         chroot $TARGET_MOUNTPOINT butterknife-postdeploy
-        
-        case $PARTITIONING_METHOD in
-            receive)
-                echo "Skipping GRUB install"
-            ;;
-            *)
-                case $bk_grub_method in
-                    none)
-                        echo "Skipping GRUB install"
-                    ;;
-                    volume)
-                        chroot $TARGET_MOUNTPOINT grub-install $BUTTERKNIFE_DISK
-                    ;;
-                    both)
-                        chroot $TARGET_MOUNTPOINT grub-install $BUTTERKNIFE_DISK
-                        chroot $TARGET_MOUNTPOINT grub-install $BUTTERKNIFE_DISK
-                    ;;
-                    *)
-                        chroot $TARGET_MOUNTPOINT grub-install $BUTTERKNIFE_DISK
-                    ;;
-                esac
-            ;;
-        esac
 
         # Unmount directories
         umount $TARGET_MOUNTPOINT/mnt/pool

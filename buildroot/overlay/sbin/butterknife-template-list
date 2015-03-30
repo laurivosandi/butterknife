@@ -1,0 +1,26 @@
+#!/bin/sh
+
+if [ -z $1 ]; then
+    echo "No filesystem specified!"
+    exit 1
+fi
+
+mountpoint=$(mktemp -d)
+
+mount $1 $mountpoint -o subvol=/
+
+# New naming scheme
+for subvol in $(ls $mountpoint | grep "^@template:"); do
+    echo "$subvol \"\""
+done > /tmp/instance_subvols
+
+# Support legay naming scheme
+if [ -d $mountpoint/templates ]; then
+    for template in $(ls $mountpoint/templates); do
+        for snapshot in $(ls $mountpoint/templates/$template); do
+            echo "templates/$template/$snapshot/rootfs-ro \"\""
+        fi
+    done >> /tmp/instance_subvols
+fi
+
+umount $mountpoint

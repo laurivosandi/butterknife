@@ -1,0 +1,7 @@
+#!/bin/sh
+
+butterknife-instance-list $1 > /tmp/instance_subvols
+
+dialog \
+    --menu "Select instance" 0 0 0 \
+    --file /tmp/instance_subvols

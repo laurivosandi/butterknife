@@ -1,0 +1,27 @@
+#!/bin/sh
+
+if [ -z $1 ]; then
+    echo "No filesystem specified!"
+    exit 1
+fi
+
+if [ -z $2 ]; then
+    echo "No instance subvolume name specified!"
+    exit 2
+fi
+
+mountpoint=$(mktemp -d)
+mount $1 -o subvol=$2 $mountpoint
+mount --bind /dev $mountpoint/dev
+mount --bind /sys $mountpoint/sys
+mount --bind /proc $mountpoint/proc
+clear
+echo "Mounted $1$2 at $mountpoint"
+echo "Chrooting into $mountpoint"
+hostname instance
+chroot $mountpoint
+umount $mountpoint/dev
+umount $mountpoint/sys
+umount $mountpoint/proc
+echo "Unmounting $mountpoint"
+umount $mountpoint

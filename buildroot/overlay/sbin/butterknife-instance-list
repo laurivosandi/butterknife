@@ -1,0 +1,24 @@
+#!/bin/sh
+
+if [ -z $1 ]; then
+    echo "No filesystem specified!"
+    exit 1
+fi
+
+mountpoint=$(mktemp -d)
+
+mount $1 $mountpoint -o subvol=/
+
+# New naming scheme
+for subvol in $(ls $mountpoint | grep "^@root:" | sort -r); do
+    echo "$subvol \"\""
+done
+
+# Support legay naming scheme
+if [ -d $mountpoint/deployments ]; then
+    for timestamp in $(ls $mountpoint/deployments | sort -r); do
+        echo "deployments/$timestamp \"\""
+    done
+fi
+
+umount $mountpoint

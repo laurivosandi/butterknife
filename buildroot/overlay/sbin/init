@@ -31,7 +31,8 @@ fi
 while [ 1 ]; do
     dialog --menu "What do you want to do" 0 0 0 \
         provision       "Provision this machine" \
-        enter           "Enter deployment" \
+        instance        "Manage instances" \
+        template        "Manage templates" \
         shell           "Drop to shell" \
         reboot          "Reboot" \
         poweroff        "Shutdown" 2> /tmp/what_next
@@ -47,12 +48,15 @@ while [ 1 ]; do
             poweroff -f
         ;;
         provision)
-            provision
+            butterknife-provision
             sh
             umount /mnt/pool/dev/pts/
             umount /mnt/pool/sys/
             umount /mnt/pool/proc/
             umount /mnt/pool/
+        ;;
+        instance)
+            butterknife-instance-manage
         ;;
     esac
 done

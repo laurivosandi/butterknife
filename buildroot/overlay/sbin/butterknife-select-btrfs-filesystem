@@ -1,0 +1,15 @@
+#!/bin/sh
+
+unset partition
+for partition in $(blkid -t TYPE=btrfs | cut -d ":" -f 1); do
+    echo "$partition \"$(butterknife-partition-size $partition)\"";
+done > /tmp/btrfs_volumes
+
+if [ -z $partition ]; then
+    dialog --msgbox "Unable to detect any Butterknife filesystems" 0 0 
+    return 1
+else
+    dialog \
+        --menu "Select btrfs filesystem" 0 0 0 \
+        --file /tmp/btrfs_volumes
+fi

@@ -1,0 +1,12 @@
+#!/bin/sh
+
+partition_slug=$(echo $1 | cut -d "/" -f 3)
+sys_part="/sys/block/*/$partition_slug"
+sys_disk=$(dirname $sys_part)
+sector_count=$(cat $sys_part/size)
+sector_size=$(cat $sys_disk/queue/hw_sector_size)
+size=$(expr $sector_count / 1000000 \* $sector_size / 1000)G
+if [ $size == "G" ]; then
+    size=$(expr $sector_count / 1000 \* $sector_size / 1000)M
+fi
+echo $size
