@@ -6,7 +6,7 @@ and LXC containers.
 
 .. figure:: img/butterknife-multicast-usecase.png
 
-    Butterknife can be used to deploy hunders Linux workstations simultaneously
+    Butterknife can be used to deploy hundreds Linux workstations simultaneously
     
 General workflow
 ----------------
