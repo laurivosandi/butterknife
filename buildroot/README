@@ -70,8 +70,8 @@ Enable:
 
 Make sure you:
 
-* Make sure you use fdisk from util-linux, not from busybox.
-* Make sure you enable support for necessary ethernet cards, USB and SATA controllers 
+* use fdisk from util-linux, not from busybox.
+* enable support for necessary ethernet cards, USB and SATA controllers
 
 To compile the image run:
 

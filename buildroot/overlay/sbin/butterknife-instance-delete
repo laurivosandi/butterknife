@@ -1,5 +1,0 @@
-#!/bin/sh
-mountpoint=$(mktemp -d)
-mount $1 -o subvol=/ $mountpoint
-btrfs subvol delete $mountpoint/$2
-umount $mountpoint

@@ -1,0 +1,24 @@
+#!/bin/sh
+
+disks=$(mktemp)
+
+for disk in /dev/sd?; do
+    disk_slug=$(echo $disk | cut -d "/" -f 3)
+    sys_disk="/sys/block/$disk_slug"
+
+    if [ -d $sys_disk/device ]; then
+        sector_count=$(cat $sys_disk/size)
+        sector_size=$(cat $sys_disk/queue/hw_sector_size)
+        # Hack around these dumbass cardreaders
+        if [ "$sector_count" == "0" ]; then
+            continue
+        fi
+        size=$(expr $sector_count / 1000000 \* $sector_size / 1000)G
+        echo "$disk \"$(cat $sys_disk/device/model | xargs) ($size)\"";
+    fi
+done > $disks
+dialog --menu "Target disk" 0 0 0 \
+    --file $disks
+
+rm -f $disks
+

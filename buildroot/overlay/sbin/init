@@ -29,18 +29,15 @@ else
 fi
 
 while [ 1 ]; do
-    dialog --menu "What do you want to do" 0 0 0 \
+    action=$(dialog --menu "What do you want to do" 0 0 0 \
         provision       "Provision this machine" \
-        instance        "Manage instances" \
-        template        "Manage templates" \
-        shell           "Drop to shell" \
+        advanced        "Advanced options" \
         reboot          "Reboot" \
-        poweroff        "Shutdown" 2> /tmp/what_next
+        poweroff        "Shutdown" 2>&1 >$(tty))
+        
     clear
-    case $(cat /tmp/what_next) in
-        shell)
-            sh
-        ;;
+    
+    case $action in
         reboot)
             reboot -f
         ;;
@@ -55,8 +52,8 @@ while [ 1 ]; do
             umount /mnt/pool/proc/
             umount /mnt/pool/
         ;;
-        instance)
-            butterknife-instance-manage
+        advanced)
+            butterknife-advanced-options
         ;;
     esac
 done

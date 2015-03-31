@@ -11,25 +11,16 @@
 
 # TODO: Check connectivity with API server
 POOL_MOUNTPOINT=/mnt/pool
-POOL_TEMPLATES=$POOL_MOUNTPOINT/templates
-POOL_DEPLOYMENTS=$POOL_MOUNTPOINT/deployments
 TARGET_MOUNTPOINT=/mnt/target
 
 AGENT="Butterknife-Provisioning-Image/0.1"
 URL_LOCAL=http://butterknife
 
-# Clean up mess from interrupted snapshot retrieval
-if [ -f $POOL_TEMPLATES/dirty ]; then
-    echo "Interrupted snapshot cleanup not implemented yet!"
-    #for subvol in $(cat $POOL_TEMPLATES/dirty); do
-        # TODO: Handle these situations
-    #done
-fi
 
 #######################################
 ### Check for presence of utilities ###
 #######################################
-for util in btrfs jq fdisk find ntfsresize udp-sender udp-receiver ntpdate curl; do
+for util in btrfs jq fdisk find ntfsresize udp-sender udp-receiver ntpdate curl ms-sys; do
     if [ -z "$(which $util)" ]; then
         dialog --msgbox "Butterknife was unable to locate $util,\
             are you sure the provisioning image was compiled properly?" 0 0
@@ -96,11 +87,11 @@ case $TRANSFER_METHOD in
         DISK=/dev/$DISK_SLUG
 
         PARTITIONING_METHOD=$(dialog --menu "Partitioning $DISK" 0 0 0 \
-            purge           "Overwrite whole disk" \
-            reformat        "Reformat partition" \
+            receive         "Receive into existing btrfs filesystem" \
             unpartitioned   "Use unpartitioned area" \
             resize          "Resize last partition" \
-            receive         "Receive into existing btrfs filesystem" \
+            reformat        "Reformat partition" \
+            purge           "Overwrite whole disk" \
             2>&1 >$(tty))
 
         # TODO: deploy          "Deploy received template" \
