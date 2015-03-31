@@ -189,28 +189,26 @@ Butterknife provisioning image provides menu-driven user-interface
 with simple Enter-Enter-Enter usage:
 
 .. figure:: img/butterknife-main-screen.png
-
-    The main menu has convenience entries for shell, reboot and shutdown.
+    
+We currently support HTTP, multicast and various combinations of both:
     
 .. figure:: img/butterknife-transfer-method.png
 
-    We currently support HTTP and multicast
+Partitioning choices feature also NTFS resize and incremental upgrades:
 
 .. figure:: img/butterknife-partitioning-method.png
-
-    We also support NTFS resize and incremental snapshots
+    
+Target disk selection:
 
 .. figure:: http://lauri.vosandi.com/cache/c8683a45f56cc88895646b7090b021af.png
-
-    Target disk selection lists /dev/sd[a-z] entries.
+    
+Partition selection:
     
 .. figure:: http://lauri.vosandi.com/cache/c348448d183ea384b30bbdd4e590cab4.png
-
-    Partition selection.
+    
+Template versions are actually snapshots:
     
 .. figure:: img/butterknife-select-version.png
-
-    Template versions are actually snapshots
 
 These steps should be enough to deploy a Linux-based OS in no time.
 
@@ -220,10 +218,10 @@ Recovery console
 In case you need to recover already deployed instance or delete old
 templates pick Advanced Options from main menu which brings up following:
 
-.. img/butterknife-advanced-options.png
+.. figure:: img/butterknife-advanced-options.png
 
 All instances can be easily entered via instance maintenance entry:
 
-.. img/butterknife-instance-list.png
+.. figure:: img/butterknife-instance-list.png
 
     
