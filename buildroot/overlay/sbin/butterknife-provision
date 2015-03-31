@@ -20,7 +20,7 @@ URL_LOCAL=http://butterknife
 #######################################
 ### Check for presence of utilities ###
 #######################################
-for util in btrfs jq fdisk find ntfsresize udp-sender udp-receiver ntpdate curl ms-sys; do
+for util in btrfs jq fdisk find ntfsresize udp-sender udp-receiver ntpdate curl ms-sys mktemp test true sort uniq; do
     if [ -z "$(which $util)" ]; then
         dialog --msgbox "Butterknife was unable to locate $util,\
             are you sure the provisioning image was compiled properly?" 0 0
@@ -37,15 +37,11 @@ set -e # Bail on error
 ### Transfer method selection phase ###
 #######################################
 
-if [ -z $bk_template ] || [ -z $bk_version ]; then
-    TRANSFER_METHOD="http"
-else
-    TRANSFER_METHOD=$(dialog --menu "Select transfer method" 0 0 0 \
-        http "HTTP-only" \
-        multicast "Multicast receive" \
-        tee "Multicast via HTTP and write" \
-        proxy "Only proxy HTTP to multicast" 2>&1 >$(tty))
-fi
+TRANSFER_METHOD=$(dialog --menu "Select transfer method" 0 0 0 \
+    http "HTTP-only" \
+    multicast "Multicast receive" \
+    tee "Multicast via HTTP and write" \
+    proxy "Only proxy HTTP to multicast" 2>&1 >$(tty))
 
 
 ##################################
@@ -70,10 +66,12 @@ case $TRANSFER_METHOD in
                 sector_count=$(cat $disk/size)
                 sector_size=$(cat $disk/queue/hw_sector_size)
                 # Hack around these dumbass cardreaders
+                
                 if [ "$sector_count" == "0" ]; then
                     continue
                 fi
-                size=$(expr $sector_count / 1000000 \* $sector_size / 1000)G
+                size=$(expr $sector_count / 1000000 \* $sector_size / 1000 || true)G
+
                 echo "$slug \"$(cat $disk/device/model | xargs) ($size)\"";
             fi
         done > /tmp/disks
@@ -106,12 +104,15 @@ case $TRANSFER_METHOD in
             ;;
             resize)
                 clear
-                LAST_PARTITION=$(ls $DISK? | tail -n 1)
-                SIZE="260G"
-                ntfsresize -s $SIZE $LAST_PARTITION
+                NTFS_PARTITION=$(ls $DISK? | tail -n 1)
+                # TODO: Assert last one is NTFS
+                # TODO: Suggested size heuristics
+                MINSIZE=$(ntfsresize $NTFS_PARTITION -m | grep Minsize | cut -d ':' -f 2)
+                SUGGESTED=${MINSIZE}M
+                SIZE=$(dialog --inputbox "Enter new filesystem size of at least ${MINSIZE}M" 0 0 $SUGGESTED 2>&1 >$(tty))
+                ntfsresize -s $SIZE $NTFS_PARTITION
                 echo -e "d\n\nw" | fdisk $DISK # Remove last partition
                 echo -e "n\np\n\n\n+$SIZE\nt\n\n7\nw" | fdisk $DISK # Re-create NTFS
-#                ntfsresize -f $LAST_PARTITION
                 echo -e "n\np\n\n\n\nw" | fdisk $DISK # Create partition for btrfs
             ;;
             purge)
@@ -139,9 +140,9 @@ case $TRANSFER_METHOD in
                     partition_slug=$(echo $partition | cut -d "/" -f 3)
                     sector_count=$(cat /sys/block/$DISK_SLUG/$partition_slug/size)
                     sector_size=$(cat /sys/block/$DISK_SLUG/queue/hw_sector_size)
-                    size=$(expr $sector_count / 1000000 \* $sector_size / 1000)G
+                    size=$(expr $sector_count / 1000000 \* $sector_size / 1000 || true)G
                     if [ $size == "0G" ]; then
-                        size=$(expr $sector_count / 1000 \* $sector_size / 1000)M
+                        size=$(expr $sector_count / 1000 \* $sector_size / 1000 || true)M
                     fi
                     echo "$partition \"$size\"";
                 done > /tmp/partitions
@@ -177,8 +178,7 @@ case $TRANSFER_METHOD in
 
         # Attempt to mount target directory
         mkdir -p $POOL_MOUNTPOINT
-        mount $PARTITION $POOL_MOUNTPOINT -o subvol=/
-        
+        mount $PARTITION $POOL_MOUNTPOINT -o subvol=/        
         if [ $? -ne 0 ]; then
             dialog --msgbox "Mounting $PARTITION at $POOL_MOUNTPOINT failed, are you sure kernel has btrfs support built-in?" 0 0
             exit 255
@@ -188,15 +188,18 @@ case $TRANSFER_METHOD in
         ### Clean up ###
         ################
 
-        set +e
-        for subvol in $(ls $POOL_MOUNTPOINT | grep "^@template:"); do
+        for subvol in $(ls $POOL_MOUNTPOINT |  (grep "^@template:" || true)); do
             touch $POOL_MOUNTPOINT/$subvol/.test
             if [ $? -eq 0 ]; then
                 btrfs subvol delete $POOL_MOUNTPOINT/$subvol
             fi
         done
-        set -e
         
+        ################################################
+        ### List templates present in the filesystem ###
+        ################################################
+        local_templates=$(mktemp)
+        ls $POOL_MOUNTPOINT | (grep "^@template:" || true) > $local_templates
     ;;
     *)
         PARTITIONING_METHOD="pass"
@@ -204,11 +207,21 @@ case $TRANSFER_METHOD in
 esac
 
 ##############################
-### Server selection phase ###
+### Determine architecture ###
 ##############################
-if [ -z $bk_url ]; then
-    case $TRANSFER_METHOD in
-        http|tee|proxy)
+
+if [ -z $bk_arch ]; then
+    bk_arch=x86
+fi
+
+
+case $TRANSFER_METHOD in
+    http|tee|proxy)
+        ##############################
+        ### Server selection phase ###
+        ##############################
+        if [ -z $bk_url ]; then
+
             bk_url=$(dialog --menu "Select server" 0 0 0 \
                 $URL_LOCAL/api/                       "Use local or manually enter" \
                 https://butterknife.koodur.com/api/   "Koodur LLC" 2>&1 >$(tty))
@@ -217,44 +230,30 @@ if [ -z $bk_url ]; then
                 bk_url=$(dialog --inputbox "Use local instance or customize URL" \
                     0 0 $URL_LOCAL 2>&1 >$(tty))
             fi
-        ;;
-    esac
-fi
+        fi
 
-################################
-### Template selection phase ###
-################################
-if [ -z $bk_template ]; then
-    case $TRANSFER_METHOD in
-        local)
-            # NOT IMPLEMENTED
-            exit 255
-        ;;
-        *)
+
+        ################################
+        ### Template selection phase ###
+        ################################
+
+        if [ -z $bk_template ]; then
             # Fetch template list
             curl -A $AGENT -s $bk_url/template/ \
                 | jq '.templates[] | .namespace + "." + .identifier + " \"" + .description + "\""' -r \
                 > /tmp/available_templates
-        ;;
-    esac
 
-    bk_template=$(dialog \
-        --menu "Select template to deploy" 0 0 0 \
-        --file /tmp/available_templates \
-        2>&1 >$(tty))
+            bk_template=$(dialog \
+                --menu "Select template to deploy" 0 0 0 \
+                --file /tmp/available_templates \
+                2>&1 >$(tty))
 
-fi
+        fi
 
-if [ -z $bk_arch ]; then
-    bk_arch=x86
-fi
-
-###############################
-### Version selection phase ###
-###############################
-if [ -z $bk_version ]; then
-    case $TRANSFER_METHOD in
-        http|tee|proxy|multicast)
+        ###############################
+        ### Version selection phase ###
+        ###############################
+        if [ -z $bk_version ]; then
             # Fetch version list
             curl -A $AGENT -s $bk_url/template/$bk_template/arch/$bk_arch/version/ \
                 > /tmp/available_versions.json        
@@ -263,38 +262,26 @@ if [ -z $bk_version ]; then
                 | jq '.versions[] | .identifier + " \"" + .comment + "\""' -r \
                 | head -n 100 \
                 > /tmp/available_versions
-        ;;
-        local)
-            # NOT IMPLEMENTED
-            exit 255
-        ;;
-    esac
 
-
-    case $TRANSFER_METHOD in
-        http|tee|proxy|local|multicast)
             bk_version=$(dialog \
                 --menu "Select version to deploy" 0 0 0 \
                 --file /tmp/available_versions \
                 2>&1 >$(tty))
-        ;;
-    esac
-fi
+        fi
 
-bk_template_subvol="@template:$bk_template:$bk_arch:$bk_version"
+        bk_template_subvol="@template:$bk_template:$bk_arch:$bk_version"
 
-clear
+        clear
 
-#####################################
-### Stream URL construction phase ###
-#####################################
+        #####################################
+        ### Stream URL construction phase ###
+        #####################################
 
-case $TRANSFER_METHOD in
-    http|tee|proxy)
         # Build btrfs-stream URL
         STREAM="$bk_url/template/$bk_template/arch/$bk_arch/version/$bk_version/stream?src="
     ;;
 esac
+
 
 ##############################################
 ### Allow differential versions using HTTP ###
@@ -308,7 +295,7 @@ case $TRANSFER_METHOD in
         cat /tmp/local_version_names /tmp/available_version_names > /tmp/merged_version_names
 
         PARENTS=$(cat /tmp/merged_version_names | sort | grep -v $bk_version | uniq -d)
-        echo "version parents are: $PARENTS"
+
         for parent in $PARENTS; do
             STREAM="$STREAM$parent,"
         done
@@ -318,18 +305,27 @@ case $TRANSFER_METHOD in
 esac
 
 
-
-# TODO: Mark dirty subvol
-
 ######################
 ### Transfer phase ###
 ######################
 
 case $TRANSFER_METHOD in
     multicast)
+        if [ -z $local_templates ]; then
+            echo "local_templates not defined"
+            exit 255
+        fi
         udp-receiver --nokbd \
             | zcat \
             | btrfs receive $POOL_MOUNTPOINT/
+        # Heuristics to determine name of received snapshot
+        new_templates=$(mktemp)
+        ls $POOL_MOUNTPOINT | (grep "^@template:" || true) > $new_templates
+        bk_template_subvol=$(cat $local_templates $new_templates | sort | uniq -u)
+        # TODO: Break here if we got garbage
+        bk_template=$(echo $diff | cut -d ":" -f 2)
+        bk_arch=$(echo $diff | cut -d ":" -f 3)
+        bk_version=$(echo $diff | cut -d ":" -f 4)
     ;;
     http)
         curl -A $AGENT $STREAM \
@@ -366,7 +362,7 @@ case $PARTITIONING_METHOD in
         #################################
         
         bk_deploy_subvol="@root:$bk_template:$bk_arch:$bk_version"
-        btrfs subvolume snapshot $POOL_MOUNTPOINT/$bk_template_subvol "$POOL_MOUNTPOINT/$bk_deploy_subvol"
+        btrfs subvolume snapshot $POOL_MOUNTPOINT/$bk_template_subvol $POOL_MOUNTPOINT/$bk_deploy_subvol
         
         # Symlink @root:active to current deployment subvol
         rm -f $POOL_MOUNTPOINT/@root:active
@@ -401,10 +397,12 @@ case $PARTITIONING_METHOD in
         export BUTTERKNIFE_PARTITIONING_METHOD=$PARTITIONING_METHOD # One of purge,reformat,unpartitionied,resize,receive
         export BUTTERKNIFE_TRANSFER_METHOD=$TRANSFER_METHOD # One of multicast,http,tee
         export BUTTERKNIFE_POOL_UUID=$(blkid -s UUID -o value $PARTITION)
-        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         
         # Copy DNS config
         cat /etc/resolv.conf > $TARGET_MOUNTPOINT/etc/resolv.conf
+        
+        # Export sensible PATH
+        export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
         # Run postinstall scripts, presumably in sorted order
         chroot $TARGET_MOUNTPOINT butterknife-postdeploy

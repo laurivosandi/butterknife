@@ -128,22 +128,23 @@ Set up following in /srv/tftp/pxelinux.cfg/default:
     label butterknife
         menu label Deploy edu workstation (i386)
         kernel butterknife-i386
-        append bk_snapshot=snap34 bk_url=https://butterknife.koodur.com/api/ bk_template=edu-workstation-trusty-i386-template bk_timeserver=2.ubuntu.pool.ntp.org quiet
+        append bk_url=https://butterknife.koodur.com/api/ bk_template=com.koodur.butterknife.EduWorkstation quiet
 
     label butterknife
-        menu LABEL Butterknife (i386, HTTP-only)
-        kernel butterknife-i386
-        append bk_url=https://butterknife.koodur.com/api/ quiet
-
-    label butterknife
-        menu LABEL Butterknife (amd64, HTTP-only)
+        menu label Butterknife (amd64)
         kernel butterknife-amd64
         append bk_url=https://butterknife.koodur.com/api/ quiet
 
     label butterknife
-        menu LABEL Butterknife (i386, debug)
+        menu label Butterknife (i386, debug)
         kernel butterknife-i386
-        append bk_url=https://butterknife.koodur.com/api/ debug
+        append bk_url=https://butterknife.koodur.com/api/
+
+    label memtest
+        menu label Memtest86+
+        linux memtest86+.bin
+    root@buildbot:~# 
+
         
 
 Setting up PXE boot
