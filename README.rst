@@ -6,7 +6,7 @@ and LXC containers.
 
 .. figure:: img/butterknife-multicast-usecase.png
 
-    Butterknife can be used to deploy hunders Linux workstations simultaneously
+    Butterknife can be used to deploy hundreds Linux workstations simultaneously
     
 General workflow
 ----------------
@@ -188,14 +188,40 @@ Deployment workflow
 Butterknife provisioning image provides menu-driven user-interface
 with simple Enter-Enter-Enter usage:
 
-.. figure:: http://lauri.vosandi.com/cache/85820b490471410cfb1833f074c5ae84.png
-
-    The main menu has convenience entries for shell, reboot and shutdown.
+.. figure:: img/butterknife-main-screen.png
     
-.. figure:: http://lauri.vosandi.com/cache/c8683a45f56cc88895646b7090b021af.png
+We currently support HTTP, multicast and various combinations of both:
+    
+.. figure:: img/butterknife-transfer-method.png
 
-    Target disk selection lists /dev/sd[a-z] entries.
+Partitioning choices feature also NTFS resize and incremental upgrades:
+
+.. figure:: img/butterknife-partitioning-method.png
+    
+Target disk selection:
+
+.. figure:: http://lauri.vosandi.com/cache/c8683a45f56cc88895646b7090b021af.png
+    
+Partition selection:
     
 .. figure:: http://lauri.vosandi.com/cache/c348448d183ea384b30bbdd4e590cab4.png
+    
+Template versions are actually snapshots:
+    
+.. figure:: img/butterknife-select-version.png
 
-    Partition selection.
+These steps should be enough to deploy a Linux-based OS in no time.
+
+Recovery console
+----------------
+
+In case you need to recover already deployed instance or delete old
+templates pick Advanced Options from main menu which brings up following:
+
+.. figure:: img/butterknife-advanced-options.png
+
+All instances can be easily entered via instance maintenance entry:
+
+.. figure:: img/butterknife-instance-list.png
+
+    
