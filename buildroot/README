@@ -30,7 +30,7 @@ Enable:
     Kernel
         Linux Kernel
             Kernel Version (Same as toolchain headers)
-            Kernel configuration (Using a custom config file) -> path/to/butterknife/buildroot/kernel.config
+            Kernel configuration (Using a custom config file) -> path/to/butterknife/buildroot/kernel-i386.config
     Filesystem and flash utilities ->
         ms-sys
         btrfs-progs

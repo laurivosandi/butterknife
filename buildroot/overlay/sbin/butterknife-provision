@@ -10,7 +10,7 @@
 # Dependencies: fdisk btrfs find dialog ntfs-3g ntfsprogs parted
 
 # TODO: Check connectivity with API server
-POOL_MOUNTPOINT=/mnt/pool
+POOL_MOUNTPOINT=/var/butterknife/pool
 TARGET_MOUNTPOINT=/mnt/target
 
 AGENT="Butterknife-Provisioning-Image/0.1"
@@ -194,12 +194,6 @@ case $TRANSFER_METHOD in
                 btrfs subvol delete $POOL_MOUNTPOINT/$subvol
             fi
         done
-        
-        ################################################
-        ### List templates present in the filesystem ###
-        ################################################
-        local_templates=$(mktemp)
-        ls $POOL_MOUNTPOINT | (grep "^@template:" || true) > $local_templates
     ;;
     *)
         PARTITIONING_METHOD="pass"
@@ -291,7 +285,7 @@ case $TRANSFER_METHOD in
     http)
         # Determine differential version parents
         cat /tmp/available_versions.json | jq -r '.versions[] .identifier' > /tmp/available_version_names
-        ls $POOL_MOUNTPOINT | grep "^@template:$bk_template:$bk_arch:" | cut -d ":" -f 4 > /tmp/local_version_names
+        ls $POOL_MOUNTPOINT | (grep "^@template:$bk_template:$bk_arch:" || true) | cut -d ":" -f 4 > /tmp/local_version_names
         cat /tmp/local_version_names /tmp/available_version_names > /tmp/merged_version_names
 
         PARENTS=$(cat /tmp/merged_version_names | sort | grep -v $bk_version | uniq -d)
@@ -311,21 +305,17 @@ esac
 
 case $TRANSFER_METHOD in
     multicast)
-        if [ -z $local_templates ]; then
-            echo "local_templates not defined"
-            exit 255
-        fi
+        ls $POOL_MOUNTPOINT | (grep "^@template:" || true) > /tmp/local_templates
         udp-receiver --nokbd \
             | zcat \
             | btrfs receive $POOL_MOUNTPOINT/
         # Heuristics to determine name of received snapshot
-        new_templates=$(mktemp)
-        ls $POOL_MOUNTPOINT | (grep "^@template:" || true) > $new_templates
-        bk_template_subvol=$(cat $local_templates $new_templates | sort | uniq -u)
+        ls $POOL_MOUNTPOINT | (grep "^@template:" || true) > /tmp/new_templates
+        bk_template_subvol=$(cat /tmp/local_templates /tmp/new_templates | sort | uniq -u)
         # TODO: Break here if we got garbage
-        bk_template=$(echo $diff | cut -d ":" -f 2)
-        bk_arch=$(echo $diff | cut -d ":" -f 3)
-        bk_version=$(echo $diff | cut -d ":" -f 4)
+        bk_template=$(echo $bk_template_subvol | cut -d ":" -f 2)
+        bk_arch=$(echo $bk_template_subvol | cut -d ":" -f 3)
+        bk_version=$(echo $bk_template_subvol | cut -d ":" -f 4)
     ;;
     http)
         curl -A $AGENT $STREAM \
@@ -407,13 +397,17 @@ case $PARTITIONING_METHOD in
         # Run postinstall scripts, presumably in sorted order
         chroot $TARGET_MOUNTPOINT butterknife-postdeploy
 
+        # Be forgiving from now on
+        set +e
+
         # Unmount directories
-        umount $TARGET_MOUNTPOINT/mnt/pool
+        umount $TARGET_MOUNTPOINT$POOL_MOUNTPOINT
         umount $TARGET_MOUNTPOINT/dev
         umount $TARGET_MOUNTPOINT/sys
         umount $TARGET_MOUNTPOINT/proc
         umount $TARGET_MOUNTPOINT/tmp
         umount $TARGET_MOUNTPOINT
+        umount $POOL_MOUNTPOINT
 
         echo "Flushing buffers"
         sync

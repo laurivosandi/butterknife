@@ -64,7 +64,7 @@ do
             mountpoint=$(mktemp -d)
             mount $BUTTERKNIFE_PARTITION -o subvol=/ $mountpoint
             subvols=$(mktemp)
-            for subvol in $(btrfs subvol list $mountpoint | cut -d ' ' -f 9); do
+            for subvol in $(btrfs subvol list $mountpoint | cut -d ' ' -f 9 | sort -r); do
                 echo "$subvol \"\""
             done > $subvols
             selected_subvol=$(dialog --menu "Select subvolume to delete on $BUTTERKNIFE_PARTITION" 0 0 0 \
