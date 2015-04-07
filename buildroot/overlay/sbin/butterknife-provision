@@ -189,10 +189,13 @@ case $TRANSFER_METHOD in
         ################
 
         for subvol in $(ls $POOL_MOUNTPOINT |  (grep "^@template:" || true)); do
+            set +e
             touch $POOL_MOUNTPOINT/$subvol/.test
             if [ $? -eq 0 ]; then
+                set -e
                 btrfs subvol delete $POOL_MOUNTPOINT/$subvol
             fi
+            set -e
         done
     ;;
     *)
@@ -204,10 +207,7 @@ esac
 ### Determine architecture ###
 ##############################
 
-if [ -z $bk_arch ]; then
-    bk_arch=x86
-fi
-
+bk_arch=$(uname -m | sed 's/^i.86$/x86/')
 
 case $TRANSFER_METHOD in
     http|tee|proxy)
