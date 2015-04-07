@@ -4,7 +4,7 @@ Butterknife provisioning suite
 Butterknife makes Linux deployment dead-simple using the Btrfs filesystem
 and LXC containers.
 
-.. figure:: img/butterknife-multicast-usecase.png
+.. figure:: img/butterknife-usecase-multicast.png
 
     Butterknife can be used to deploy hundreds Linux workstations simultaneously
     
@@ -143,8 +143,6 @@ Set up following in /srv/tftp/pxelinux.cfg/default:
     label memtest
         menu label Memtest86+
         linux memtest86+.bin
-    root@buildbot:~# 
-
         
 
 Setting up PXE boot
