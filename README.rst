@@ -1,18 +1,16 @@
 Butterknife provisioning suite
 ==============================
 
-Butterknife makes Linux deployment dead-simple using the Btrfs filesystem
-and LXC containers.
+Butterknife makes bare-metal Linux deployment dead-simple using the Btrfs
+filesystem and containers.
 
 .. figure:: img/butterknife-usecase-multicast.png
-
-    Butterknife can be used to deploy hundreds Linux workstations simultaneously
     
 General workflow
 ----------------
 
 1. Prepare template of your customized OS in a LXC container
-2. Boot provisioning image and deploy the template
+2. Boot provisioning image and deploy the template on bare metal
 3. Enjoy using your favourite Linux-based OS :)
 
 Features
