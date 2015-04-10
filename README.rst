@@ -42,17 +42,35 @@ in Ubuntu repositories are known to be unusable:
 
     wget -c https://launchpadlibrarian.net/190998686/btrfs-tools_3.17-1.1_amd64.deb
     sudo dpkg -i btrfs-tools_3.17-1.1_amd64.deb
+    
+Make sure the root subvolume stays mounted at /var/butterknife/pool,
+with a corresponding entry in /etc/fstab:
+
+.. code::
+
+    UUID=01234567-0123-0123-0123-0123456789ab /var/butterknife/pool btrfs defaults,subvol=/,noatime 0 2
+    
+Make sure the LXC container directories are also mounted with *noatime* flag,
+otherwise all the access times reflect in differential updates as well
+causing excessive traffic.
 
 
 Publishing workflow
 -------------------
 
 Create LXC container to be used as template for deployment, for instance to 
-set up Ubuntu 14.04 container use:
+set up Ubuntu 14.04 based template use:
 
 .. code:: bash
 
     lxc-create -n your-template -B btrfs -t ubuntu -- -r trusty -a i386
+    
+Customize mountpoints in /var/lib/lxc/your-template/fstab, for example:
+
+.. code::
+
+    /var/cache/apt/archives /var/lib/lxc/your-template/rootfs/var/cache/apt/archives none bind
+    /etc/puppet/ /var/lib/lxc/your-template/rootfs/etc/puppet/ none bind,ro
 
 Start and enter the container:
 
@@ -61,7 +79,7 @@ Start and enter the container:
     lxc-start -d -n your-template
     lxc-attach -n your-template
 
-Use your favourite configuration management tool to customize the container,
+Use your favourite configuration management tool to customize the template,
 eg for Puppet users:
 
 .. code:: bash
@@ -92,6 +110,12 @@ Use butterknife to take a snapshot of the LXC container:
 .. code:: bash
 
     butterknife-release -n your-template
+    
+Finally fire up the HTTP API:
+
+.. code:: bash
+
+    butterknife-http-server
 
 
 Serving provisioning image over PXE

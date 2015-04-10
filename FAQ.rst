@@ -4,7 +4,7 @@ Frequently asked questions
 Is it like cloning?
 -------------------
 
-Not exactly, requires taking machines offline
+Not exactly, cloning requires taking machines offline
 for cloning process and you can not perform
 incremental updates.
 Even now we support *receive* functionality
