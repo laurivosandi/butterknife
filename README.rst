@@ -108,6 +108,32 @@ Copy post-deploy, pre-release scripts and other helpers:
     rsync -av \
         path/to/butterknife/template/overlay/ \
         /var/lib/lxc/your-template/rootfs/
+        
+Create Butterknife configuration for the template in
+/var/lib/lxc/your-template/rootfs/etc/butterknife/butterknife.conf:
+
+.. code:: ini
+
+    [template]
+    name=YourTemplateName
+
+Also create Butterknife configuration for the host in 
+/etc/butterknife/butterknife.conf:
+
+.. code:: ini
+
+    [global]
+    namespace=org.example.butterknife
+    endpoint=https://butterknife.example.org
+    
+This results template snapshot names with following scheme:
+
+.. code::
+
+    @template:org.example.butterknife.YourTemplateName:x86:snap42
+    @template:org.example.butterknife.YourTemplateName:x86:snap43
+    @template:org.example.butterknife.YourTemplateName:x86:snap44
+    etc ...
 
 Use butterknife to take a snapshot of the LXC container:
 
