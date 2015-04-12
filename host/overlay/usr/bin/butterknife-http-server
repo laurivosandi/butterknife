@@ -19,8 +19,9 @@ try:
     # And you have following in /etc/sudoers.d/butterknife:
     # butterknife ALL=(ALL) NOPASSWD: /sbin/btrfs send /var/butterknife/pool/*
 except KeyError:
-    name = uid = gid = gecos = root = shell = None
-  
+    name = uid = gid = gecos = shell = None
+    root = "/var/butterknife/pool"
+
 class MyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, datetime):
