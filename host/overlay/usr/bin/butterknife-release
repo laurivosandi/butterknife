@@ -3,19 +3,14 @@ import os
 
 from optparse import OptionParser
 parser = OptionParser()
-parser.add_option("-p", "--pool", default="/mnt/pool", help="Btrfs pool path, defaults to /mnt/pool")
+parser.add_option("-p", "--pool", default="/var/butterknife/pool", help="Btrfs pool path, defaults to")
 parser.add_option("-n", "--name", help="Name of the container to prepare")
 parser.add_option("-c", "--comment", help="Comment for snapshot")
 options, args = parser.parse_args()
 
-if not os.path.ismount(options.pool):
-    print("Pool path", options.pool, "is not mountpoint")
-    exit(255)
-
-POOL_TEMPLATES = os.path.join(options.pool, "templates")
-
-if not os.path.exists(POOL_TEMPLATES):
-    os.makedirs(POOL_TEMPLATES)
+if not os.path.isdir(options.pool):
+    print("%s is not directory" % options.pool)
+    exit("255")
 
 if not options.name:
     print("No container name specified!")
@@ -27,36 +22,47 @@ if container.running:
     print("Stopping container")
     container.stop()
 
+print(dir(container))
+print(container.get_keys())
 
 ROOTFS = container.get_config_item("lxc.rootfs")
-
-if not os.path.isdir(os.path.join(ROOTFS, "etc", "butterknife")):
-    print("The container is not prepared for Butterknife, /etc/butterknife is missing!")
-    exit(253)
 
 assert os.path.isdir(ROOTFS), "No directory at %s" % ROOTFS
 
 POSTDEPLOY_SCRIPTS = os.path.join(ROOTFS, "etc", "butterknife", "postdeploy.d")
-assert os.path.isdir(POSTDEPLOY_SCRIPTS), "Postinstall scripts directory %s missing!" % POSTINSTALL_SCRIPTS
+assert os.path.isdir(POSTDEPLOY_SCRIPTS), "Postinstall scripts directory %s missing!" % POSTDEPLOY_SCRIPTS
+
+#btrfs subvolume snapshot -r 
+
+import configparser
+config = configparser.ConfigParser()
+config.read('/etc/butterknife/butterknife.conf')
+
+
+config.read(os.path.join(ROOTFS, "etc/butterknife/butterknife.conf"))
+if "template" not in config.sections():
+    config.add_section("template")
+if "name" not in config["template"]:
+    config.set("template", options.name)
+config.set("template", "endpoint", config.get("global", "endpoint"))
+config.set("template", "namespace", config.get("global", "namespace"))
+
+config.set("template", "architecture", container.get_config_item("lxc.arch"))
 
 snapshot = container.snapshot()
+
+config.set("template", "version", snapshot)
+
 print("Created snapshot:", snapshot)
 
-SNAPSHOT_DIRECTORY = os.path.join("/var/lib/lxcsnaps", options.name, snapshot)
+snapdir = os.path.join("/var/lib/lxcsnaps", options.name, snapshot)
 
-BUTTERKNIFE_CONFIG = os.path.join(SNAPSHOT_DIRECTORY, "etc", "butterknife")
+with open(os.path.join(snapdir, "rootfs/etc/butterknife/butterknife.conf"), "w") as fh:
+    config.write(fh)
 
-with open(os.path.join(BUTTERKNIFE_CONFIG, "issue"), "w") as fh:
-    fh.write("TEMPLATE=\"%s\"\n" % options.name)
-    fh.write("SNAPSHOT=\"%s\"\n" % snapshot)
-    
-# TODO: Run pre-release scripts here
+cmd = "btrfs", "subvolume", "snapshot", "-r", os.path.join(snapdir, "rootfs"), \
+    os.path.join(options.pool, "@template:%(namespace)s.%(name)s:%(architecture)s:%(version)s" % config["template"])
 
-
-TEMPLATE_DIRECTORY = os.path.join(TEMPLATE_POOL, str(uuid.uuid4()))
-
-
-cmd = "btrfs", "subvolume", "snapshot", "-r", os.path.join(SNAPSHOT_DIRECTORY, "rootfs"), TEMPLATE_DIRECTORY
 print("Executing:", " ".join(cmd))
 
 import subprocess

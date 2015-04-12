@@ -48,12 +48,16 @@ with a corresponding entry in /etc/fstab:
 
 .. code::
 
-    UUID=01234567-0123-0123-0123-0123456789ab /var/butterknife/pool btrfs defaults,subvol=/,noatime 0 2
-    
-Make sure the LXC container directories are also mounted with *noatime* flag,
-otherwise all the access times reflect in differential updates as well
-causing excessive traffic.
+    UUID=01234567-0123-0123-0123-0123456789ab /var/butterknife/pool btrfs defaults,subvol=/,noatime,nodiratime 0 2
 
+Note that UUID in this case is the unique identifier of the Btrfs filesystem
+which can be determined with **blkid** utility.
+Make sure the LXC container directories are also mounted with *noatime*
+and *nodiratime* flag otherwise all the access times reflect in differential
+updates as well causing excessive traffic.
+Make sure the LXC container and snapshot directories
+reside in the same Btrfs filesystem as 
+/var/butterknife/pool.
 
 Publishing workflow
 -------------------
