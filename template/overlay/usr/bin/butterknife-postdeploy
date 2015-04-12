@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source /etc/environment
+
 if [ -z "$BUTTERKNIFE_PARTITION" ]; then exit 255; fi
 if [ -z "$BUTTERKNIFE_DISK" ]; then exit 255; fi
 if [ -z "$BUTTERKNIFE_POOL_MOUNTPOINT" ]; then exit 255; fi

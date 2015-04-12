@@ -14,13 +14,8 @@ USERNAME=$(dialog --inputbox "Enter username" 0 0 Administrator 2>&1 >$(tty))
 PASSWORD=$(dialog --insecure --passwordbox "Enter password for $USERNAME@$REALM" 0 0 2>&1 >$(tty))
 HOSTNAME=$(cat /etc/hostname)
 
-if [ -x /usr/sbin/sssd ] && [ -x /usr/sbin/winbindd ]; then
-    METHOD=$(dialog --menu "Which subsystem would you like to use" 0 0 0 \
-        sss "System Security Services Daemon" \
-        winbind "Winbind daemon" \
-        skip "Leave PAM config intact" 2>&1 >$(tty))
-elif [ -x /usr/sbin/sssd ]; then
-    METHOD=sssd
+if [ -x /usr/sbin/sssd ]; then
+    METHOD=sss
 elif [ -x /usr/sbin/winbindd ]; then
     METHOD=winbind
 else
@@ -28,6 +23,8 @@ else
 fi
 
 clear
+
+set +e
 
 echo "Joining machine $HOSTNAME to domain $DOMAIN..."
 
@@ -91,13 +88,12 @@ EOF
 
 net ads join -U $USERNAME%$PASSWORD
 
+
 #################################################
 ### Setup LDAP client config and certificates ### 
 #################################################
 
-mkdir -p /etc/ldap/certs
-
-LDAP_CERT=/etc/ldap/$DOMAIN
+LDAP_CERT=/etc/ldap/domain.pem
 LDAP_SRV=$(dig -t SRV _ldap._tcp.$DOMAIN +short | xargs)
 LDAP_PORT=$(echo $LDAP_SRV | cut -d ' ' -f 3)
 LDAP_HOSTNAME=$(echo $LDAP_SRV | cut -d ' ' -f 4)
@@ -201,6 +197,7 @@ sudo_provider = ad
 cache_credentials = true
 dyndns_update = false
 krb5_use_enterprise_principal = false
+ldap_disable_referrals = true
 EOF
 
 chmod 0600 /etc/sssd/sssd.conf
@@ -213,8 +210,6 @@ fi
 sed -i -e "s/^passwd:.*/passwd: compat $METHOD/" /etc/nsswitch.conf
 sed -i -e "s/^group:.*/group: compat $METHOD/" /etc/nsswitch.conf
 sed -i -e "s/^shadow:.*/shadow: compat/" /etc/nsswitch.conf
-
-set +e
 
 if [ -e /run/samba/winbindd.pid ] || [ -e /run/sssd.pid ]; then
     RESTART=yes
@@ -247,12 +242,13 @@ service smb start
 
 case $METHOD in
    sss)
-        update-rc.d -f winbind remove
-        update-rc.d sssd defaults
         
         if [ -d /etc/init ]; then
             echo manual > /etc/init/winbind.override
             rm -f /etc/init/sssd.override
+        else
+            update-rc.d -f winbind remove
+            update-rc.d sssd defaults
         fi
 
         if [ $RESTART ]; then
@@ -263,12 +259,13 @@ case $METHOD in
         fi
     ;;
     winbind)
-        update-rc.d -f sssd remove
-        update-rc.d winbind defaults
 
         if [ -d /etc/init ]; then
             echo manual > /etc/init/sssd.override
             rm -f /etc/init/winbind.override
+        else
+            update-rc.d -f sssd remove
+            update-rc.d winbind defaults
         fi
 
         if [ $RESTART ]; then
@@ -281,4 +278,3 @@ case $METHOD in
     ;;
 esac
 
-read -p "Press [Enter] to continue..."

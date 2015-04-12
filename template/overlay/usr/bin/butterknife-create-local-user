@@ -9,6 +9,7 @@ USERNAME=$(dialog --inputbox "Enter username" 0 0 $(echo $GIVEN_NAME | tr '[:upp
 clear
 
 adduser --gecos "$GIVEN_NAME $SURNAME,,," $USERNAME --disabled-password
+gpasswd -a $USERNAME sudo
 
 while :
 do
@@ -23,4 +24,3 @@ do
     fi
 done
 
-read -p "Press [Enter] to continue..."
