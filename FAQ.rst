@@ -15,6 +15,19 @@ that the machine can download and apply
 new snapshot while the machine is up, running and
 in use.
 
+
+Why not Puppet, Salt, Chef, Ansible?
+------------------------------------
+
+Butterknife is not substitute for your favourite configuration management tool,
+it complements it.
+You can use the configuration management tool to set up the template,
+then use Butterknife to deploy the template and continue managing the
+workstations with the remote management system you already have in place.
+Using just Puppet etc means that all the workstations have to pull the individual
+packages causing whole lot of traffic on the network not to talk about the
+time spent on bootstrapping a machine.
+
 Can I run the infrastructure on my own?
 ---------------------------------------
 
