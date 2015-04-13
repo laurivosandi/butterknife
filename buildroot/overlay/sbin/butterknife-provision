@@ -14,7 +14,7 @@ POOL_MOUNTPOINT=/var/butterknife/pool
 TARGET_MOUNTPOINT=/mnt/target
 
 AGENT="Butterknife-Provisioning-Image/0.1"
-URL_LOCAL=http://butterknife
+URL_LOCAL=http://butterknife/api
 
 
 #######################################
@@ -217,7 +217,7 @@ case $TRANSFER_METHOD in
         if [ -z $bk_url ]; then
 
             bk_url=$(dialog --menu "Select server" 0 0 0 \
-                $URL_LOCAL/api/                       "Use local or manually enter" \
+                $URL_LOCAL                       "Use local or manually enter" \
                 https://butterknife.koodur.com/api/   "Koodur LLC" 2>&1 >$(tty))
                 
             if [ "$bk_url" == $URL_LOCAL ]; then
@@ -307,7 +307,6 @@ case $TRANSFER_METHOD in
     multicast)
         ls $POOL_MOUNTPOINT | (grep "^@template:" || true) > /tmp/local_templates
         udp-receiver --nokbd \
-            | zcat \
             | btrfs receive $POOL_MOUNTPOINT/
         # Heuristics to determine name of received snapshot
         ls $POOL_MOUNTPOINT | (grep "^@template:" || true) > /tmp/new_templates
@@ -318,24 +317,23 @@ case $TRANSFER_METHOD in
         bk_version=$(echo $bk_template_subvol | cut -d ":" -f 4)
     ;;
     http)
-        curl -A $AGENT $STREAM \
-            | zcat \
+        curl --compressed -A $AGENT $STREAM \
             | btrfs receive $POOL_MOUNTPOINT/
     ;;
     tee)
         dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
         mkfifo /tmp/multicast_stream /tmp/local_stream
-        zcat /tmp/local_stream | btrfs receive $POOL_MOUNTPOINT/ &
+        cat /tmp/local_stream | btrfs receive $POOL_MOUNTPOINT/ &
         sleep 1
         udp-sender --nokbd --no-progress --min-receivers 1 --min-wait 5 /tmp/multicast_stream &
         sleep 1
-        curl -A $AGENT  -s $STREAM | tee /tmp/multicast_stream > /tmp/local_stream
+        curl --compressed -A $AGENT  -s $STREAM | tee /tmp/multicast_stream > /tmp/local_stream
         sleep 2
         # TODO: Ensure btrfs receive has finished
     ;;
     proxy)
         dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
-        curl -A $AGENT -s $STREAM \
+        curl --compressed -A $AGENT -s $STREAM \
             | udp-sender --nokbd --min-receivers 1 --min-wait 5
     ;;
 esac
