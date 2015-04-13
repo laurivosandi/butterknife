@@ -32,6 +32,21 @@ Btrfs support in Linux 3.16 has proven to be pretty
 reliable. We haven't faced any issues like 
 we did with 3.14 and earlier kernels.
 
+Why not ZFS?
+------------
+
+ZFS is great for network attached storage and servers.
+To use ZFS at least 1GB of memory is reccommended,
+which most often means that you're not running ZFS on a
+workstation or laptop. Also ZFS was designed for 64-bit systems,
+at the moment ZFS builds for 32-bit Linuces but it's not considered stable [#zfsonlinux]_.
+Due to licensing issues it is not possible to merge
+the original ZFS driver in Linux upstream,
+meaning it's tricky to install any Linux-based OS
+on ZFS root filesystem.
+
+.. [#zfsonlinux] http://zfsonlinux.org/faq.html
+
 Why not use CoreOS, Ubuntu Core, Docker, etc?
 ---------------------------------------------
 
