@@ -4,12 +4,10 @@
 #   - bk_url=https://mgmt.koodur.com/api
 #   - bk_template=your-template
 #   - bk_version=snap9
-#   - bk_domain=32kk.lan
 
 # TODO: Make sure fdisk from busybox is NOT used, it's counting sectors incorrectly (?!)
-# Dependencies: fdisk btrfs find dialog ntfs-3g ntfsprogs parted
-
 # TODO: Check connectivity with API server
+
 POOL_MOUNTPOINT=/var/butterknife/pool
 TARGET_MOUNTPOINT=/mnt/target
 
@@ -66,7 +64,7 @@ case $TRANSFER_METHOD in
                 sector_count=$(cat $disk/size)
                 sector_size=$(cat $disk/queue/hw_sector_size)
                 # Hack around these dumbass cardreaders
-                
+
                 if [ "$sector_count" == "0" ]; then
                     continue
                 fi
@@ -178,12 +176,12 @@ case $TRANSFER_METHOD in
 
         # Attempt to mount target directory
         mkdir -p $POOL_MOUNTPOINT
-        mount $PARTITION $POOL_MOUNTPOINT -o subvol=/        
+        mount $PARTITION $POOL_MOUNTPOINT -o subvol=/
         if [ $? -ne 0 ]; then
             dialog --msgbox "Mounting $PARTITION at $POOL_MOUNTPOINT failed, are you sure kernel has btrfs support built-in?" 0 0
             exit 255
         fi
-        
+
         ################
         ### Clean up ###
         ################
@@ -219,7 +217,7 @@ case $TRANSFER_METHOD in
             bk_url=$(dialog --menu "Select server" 0 0 0 \
                 $URL_LOCAL                       "Use local or manually enter" \
                 https://butterknife.koodur.com/api/   "Koodur LLC" 2>&1 >$(tty))
-                
+
             if [ "$bk_url" == $URL_LOCAL ]; then
                 bk_url=$(dialog --inputbox "Use local instance or customize URL" \
                     0 0 $URL_LOCAL 2>&1 >$(tty))
@@ -250,7 +248,7 @@ case $TRANSFER_METHOD in
         if [ -z $bk_version ]; then
             # Fetch version list
             curl -A $AGENT -s $bk_url/template/$bk_template/arch/$bk_arch/version/ \
-                > /tmp/available_versions.json        
+                > /tmp/available_versions.json
 
             cat /tmp/available_versions.json \
                 | jq '.versions[] | .identifier + " \"" + .comment + "\""' -r \
@@ -298,6 +296,16 @@ case $TRANSFER_METHOD in
     ;;
 esac
 
+####################################################
+### Enable compression if we're going over HTTPS ###
+####################################################
+
+case $STREAM in
+    https://)
+        STREAM=--compressed $STREAM
+    ;;
+esac
+
 
 ######################
 ### Transfer phase ###
@@ -317,7 +325,7 @@ case $TRANSFER_METHOD in
         bk_version=$(echo $bk_template_subvol | cut -d ":" -f 4)
     ;;
     http)
-        curl --compressed -A $AGENT $STREAM \
+        curl -A $AGENT $STREAM \
             | btrfs receive $POOL_MOUNTPOINT/
     ;;
     tee)
@@ -327,13 +335,13 @@ case $TRANSFER_METHOD in
         sleep 1
         udp-sender --nokbd --no-progress --min-receivers 1 --min-wait 5 /tmp/multicast_stream &
         sleep 1
-        curl --compressed -A $AGENT  -s $STREAM | tee /tmp/multicast_stream > /tmp/local_stream
+        curl -A $AGENT  -s $STREAM | tee /tmp/multicast_stream > /tmp/local_stream
         sleep 2
         # TODO: Ensure btrfs receive has finished
     ;;
     proxy)
         dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
-        curl --compressed -A $AGENT -s $STREAM \
+        curl -A $AGENT -s $STREAM \
             | udp-sender --nokbd --min-receivers 1 --min-wait 5
     ;;
 esac
@@ -348,14 +356,14 @@ case $PARTITIONING_METHOD in
         #################################
         ### Template deployment phase ###
         #################################
-        
+
         bk_deploy_subvol="@root:$bk_template:$bk_arch:$bk_version"
         btrfs subvolume snapshot $POOL_MOUNTPOINT/$bk_template_subvol $POOL_MOUNTPOINT/$bk_deploy_subvol
-        
+
         # Symlink @root:active to current deployment subvol
         rm -f $POOL_MOUNTPOINT/@root:active
         ln -s $bk_deploy_subvol $POOL_MOUNTPOINT/@root:active
-        
+
 
         ###############################
         ### Run post-deploy scripts ###
@@ -385,10 +393,10 @@ case $PARTITIONING_METHOD in
         export BUTTERKNIFE_PARTITIONING_METHOD=$PARTITIONING_METHOD # One of purge,reformat,unpartitionied,resize,receive
         export BUTTERKNIFE_TRANSFER_METHOD=$TRANSFER_METHOD # One of multicast,http,tee
         export BUTTERKNIFE_POOL_UUID=$(blkid -s UUID -o value $PARTITION)
-        
+
         # Copy DNS config
         cat /etc/resolv.conf > $TARGET_MOUNTPOINT/etc/resolv.conf
-        
+
         # Export sensible PATH
         export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 

@@ -1,0 +1,137 @@
+#!/usr/bin/python3
+import os
+import click
+from urllib.parse import urlparse
+import json
+import urllib.request
+
+from subprocess import check_output
+
+class Template(object):
+    def __init__(self, address):
+        self.o = urlparse(address)
+        subvol = os.path.basename(self.o.path)
+        _, fqn, self.architecture, self.version = subvol.split(":")
+        self.namespace, self.identifier = fqn.rsplit(".", 1)
+
+    def __repr__(self):
+        return "@template:%s.%s:%s:%s" % (self.namespace, self.identifier, self.architecture, self.version)
+
+    def __eq__(self, other):
+        return self.o == other.o
+
+    def __gt__(self, other):
+        return self.o > other.o
+
+class Pool(object):
+    def __init__(self, address):
+        self.o = urlparse(address)
+        assert self.o.scheme in ("http", "https", "ssh", "file"), "Invalid transport %s" % self.o.scheme
+
+    def list_templates(self):
+        if self.o.scheme == "file":
+            assert not self.o.username, "Username not supported for file:// transport"
+            assert not self.o.port, "Port not supported for file:// transport"
+            path = self.o.path or "/var/butterknife/pool/"
+            print("Listing local templates in %s" % path)
+            for entry in os.listdir(path):
+                if entry.startswith("@template:"):
+                    yield Template("file://%s%s/%s" % (self.o.netloc, path, entry))
+        elif self.o.scheme == "ssh":
+            path = self.o.path or "/var/butterknife/pool"
+            cmd = "ssh", (self.o.username + "@" if self.o.username else "") + self.o.netloc,
+            if self.o.port:
+                cmd = cmd + ("-p", self.o.port)
+            cmd += "ls", path,
+            print("Executing", cmd)
+            for entry in check_output(cmd).decode("utf-8").split("\n"):
+                if entry.startswith("@template:"):
+                    url = "ssh://"
+                    if self.o.username:
+                        url += self.u.username + "@"
+                    url += self.o.netloc
+                    if self.o.port:
+                        url += ":%d" % self.o.port
+                    url += path + "/" + entry
+                    yield Template(url)
+        elif self.o.scheme in ("http", "https"):
+            fh = urllib.request.urlopen("%s://%s/api/template/" % (self.o.scheme, self.o.netloc))
+            for entry in json.loads(fh.read().decode("ascii"))["templates"]:
+                yield "%(namespace)s.%(identifier)s" % entry
+        else:
+            raise
+
+@click.command()
+@click.option("--source", required=True, help="Source pool")
+@click.option("--destination", default="file://", help="Target pool")
+@click.option("-c", "--category", default="@template", help="Subvolume type")
+@click.option("-n", "--namespace", default="*", help="Template namespace")
+@click.option("-i", "--identifier", default="*", help="Template identifier")
+@click.option("-a", "--architecture", default="*", help="Architecture")
+@click.option("-v", "--version", default="*", help="Version")
+def pull(source, destination, category, namespace, identifier, arch, version):
+    click.echo("Pushing %s:%s.%s:%s:%s from %s to %s" % (category, namespace,
+        identifier, architecture, version, source, destination))
+    pool = Pool(source)
+    pool.list_templates()
+
+@click.command()
+@click.option("--source", default="file://", help="Source pool")
+@click.option("--destination", required=True, help="Destination pool")
+@click.option("-c", "--category", default="@template", help="Subvolume type")
+@click.option("-n", "--namespace", default="*", help="Template namespace")
+@click.option("-i", "--identifier", default="*", help="Template identifier")
+@click.option("-a", "--architecture", default="*", help="Architecture")
+@click.option("-v", "--version", default="*", help="Version")
+def push(source, destination, category, namespace, identifier, arch, version):
+    click.echo("Pushing %s:%s.%s:%s:%s from %s to %s" % (category, namespace,
+        identifier, architecture, version, source, destination))
+
+
+@click.command()
+@click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
+@click.option("-c", "--category", default="@template", help="Subvolume type")
+@click.option("-n", "--namespace", default="*", help="Template namespace")
+@click.option("-i", "--identifier", default="*", help="Template identifier")
+@click.option("-a", "--architecture", default="*", help="Architecture")
+@click.option("-v", "--version", default="*", help="Version")
+def list(pool, category, namespace, identifier, architecture, version):
+    click.echo("Listing %s:%s.%s:%s:%s in %s" % (category, namespace, identifier, architecture, version, pool))
+    pool = Pool(pool)
+    for template in sorted(pool.list_templates()):
+        if namespace != "*" and template.namespace != namespace:
+            continue
+        if identifier != "*" and template.identifier != identifier:
+            continue
+        if architecture != "*" and template.architecture != architecture:
+            continue
+        if version != "*" and template.version != version:
+            continue
+        click.echo(template)
+
+@click.command()
+@click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
+@click.option("-c", "--category", default="@template", help="Subvolume type")
+@click.option("-n", "--namespace", default="*", help="Template namespace")
+@click.option("-i", "--identifier", default="*", help="Template identifier")
+@click.option("-a", "--architecture", default="*", help="Architecture")
+@click.option("-v", "--version", default="*", help="Version")
+@click.option("-u", "--user", default="root", help="Run as user")
+@click.option("-p", "--port", default=80, help="Listen port")
+@click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
+def serve(pool, category, namespace, identifier, architecture, version, user, port, listen):
+    click.echo("Serving %s:%s.%s:%s:%s from %s at %s:%d" % (category, namespace,
+        identifier, architecture, version, pool, listen, port))
+
+
+@click.group()
+def cli():
+    pass
+
+cli.add_command(pull)
+cli.add_command(push)
+cli.add_command(list)
+cli.add_command(serve)
+
+if __name__ == "__main__":
+    cli()
