@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import json
 import urllib.request
 
-from subprocess import check_output
+import subprocess
 
 class Template(object):
     def __init__(self, address):
@@ -25,43 +25,81 @@ class Template(object):
 
 class Pool(object):
     def __init__(self, address):
-        self.o = urlparse(address)
-        assert self.o.scheme in ("http", "https", "ssh", "file"), "Invalid transport %s" % self.o.scheme
+        o = urlparse(address)
+        assert o.scheme in ("http", "https", "ssh", "file"), "Invalid transport %s" % o.scheme
+        if o.scheme == "file":
+            assert not o.netloc, "Username, hostname or port not supported for file:// transport"
+
+        assert not o.password
+        assert not o.fragment
+        assert not o.query
+
+        self.scheme = o.scheme
+        self.port = o.port
+        self.username = o.username
+        self.hostname = o.hostname
+
+        if o.path:
+            self.path = o.path
+        else:
+            self.path = "/var/butterknife/pool"
+
+    def command_receive(self):
+        if self.scheme == "file":
+            return "btrfs", "receive", self.path
+        if self.scheme == "ssh":
+            cmd = "ssh", (self.username + "@" if self.username else "") + self.hostname,
+            if self.port:
+                cmd = cmd + ("-p", self.port)
+            cmd += "btrfs", "receive", path
+            return cmd
+        else:
+            raise Exception("Unable to receive to transport %s" % self.scheme)
+
+    def command_send(self, subvol):
+        if self.scheme == "file":
+            return "btrfs", "send", os.path.join(self.path, subvol)
+        if self.scheme == "ssh":
+            cmd = "ssh", (self.username + "@" if self.username else "") + self.hostname,
+            if self.port:
+                cmd = cmd + ("-p", self.port)
+            cmd += "btrfs", "send", os.path.join(self.path, subvol)
+            return cmd
+        else:
+            raise Exception("Unable to receive to transport %s" % self.scheme)
 
     def list_templates(self):
-        if self.o.scheme == "file":
-            assert not self.o.username, "Username not supported for file:// transport"
-            assert not self.o.port, "Port not supported for file:// transport"
-            path = self.o.path or "/var/butterknife/pool/"
+        if self.scheme == "file":
+            path = self.path or "/var/butterknife/pool/"
             print("Listing local templates in %s" % path)
             for entry in os.listdir(path):
                 if entry.startswith("@template:"):
-                    yield Template("file://%s%s/%s" % (self.o.netloc, path, entry))
-        elif self.o.scheme == "ssh":
-            path = self.o.path or "/var/butterknife/pool"
-            cmd = "ssh", (self.o.username + "@" if self.o.username else "") + self.o.netloc,
-            if self.o.port:
-                cmd = cmd + ("-p", self.o.port)
-            cmd += "ls", path,
-            print("Executing", cmd)
-            for entry in check_output(cmd).decode("utf-8").split("\n"):
+                    yield Template("file://%s/%s" % (path, entry))
+        elif self.scheme == "ssh":
+
+            cmd = "ssh", (self.username + "@" if self.username else "") + self.hostname,
+            if self.port:
+                cmd = cmd + ("-p", self.port)
+            cmd += "ls", self.path,
+            print("Executing:", " ".join(cmd))
+            for entry in subprocess.check_output(cmd).decode("utf-8").split("\n"):
                 if entry.startswith("@template:"):
                     url = "ssh://"
-                    if self.o.username:
+                    if self.username:
                         url += self.u.username + "@"
-                    url += self.o.netloc
-                    if self.o.port:
-                        url += ":%d" % self.o.port
-                    url += path + "/" + entry
+                    url += self.hostname
+                    if self.port:
+                        url += ":%d" % self.port
+                    url += self.path + "/" + entry
                     yield Template(url)
-        elif self.o.scheme in ("http", "https"):
-            fh = urllib.request.urlopen("%s://%s/api/template/" % (self.o.scheme, self.o.netloc))
+        elif self.scheme in ("http", "https"):
+            fh = urllib.request.urlopen("%s://%s/api/template/" % (self.scheme, self.hostname))
             for entry in json.loads(fh.read().decode("ascii"))["templates"]:
                 yield "%(namespace)s.%(identifier)s" % entry
         else:
             raise
 
-@click.command()
+@click.command(help="Pull subvolumes")
 @click.option("--source", required=True, help="Source pool")
 @click.option("--destination", default="file://", help="Target pool")
 @click.option("-c", "--category", default="@template", help="Subvolume type")
@@ -75,7 +113,7 @@ def pull(source, destination, category, namespace, identifier, arch, version):
     pool = Pool(source)
     pool.list_templates()
 
-@click.command()
+@click.command(help="Push subvolumes")
 @click.option("--source", default="file://", help="Source pool")
 @click.option("--destination", required=True, help="Destination pool")
 @click.option("-c", "--category", default="@template", help="Subvolume type")
@@ -88,7 +126,7 @@ def push(source, destination, category, namespace, identifier, arch, version):
         identifier, architecture, version, source, destination))
 
 
-@click.command()
+@click.command(help="List local or remote subvolumes")
 @click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
 @click.option("-c", "--category", default="@template", help="Subvolume type")
 @click.option("-n", "--namespace", default="*", help="Template namespace")
@@ -109,7 +147,7 @@ def list(pool, category, namespace, identifier, architecture, version):
             continue
         click.echo(template)
 
-@click.command()
+@click.command("serve", help="Run built-in HTTP API server")
 @click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
 @click.option("-c", "--category", default="@template", help="Subvolume type")
 @click.option("-n", "--namespace", default="*", help="Template namespace")
@@ -119,19 +157,54 @@ def list(pool, category, namespace, identifier, architecture, version):
 @click.option("-u", "--user", default="root", help="Run as user")
 @click.option("-p", "--port", default=80, help="Listen port")
 @click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
-def serve(pool, category, namespace, identifier, architecture, version, user, port, listen):
+def http_serve(pool, category, namespace, identifier, architecture, version, user, port, listen):
     click.echo("Serving %s:%s.%s:%s:%s from %s at %s:%d" % (category, namespace,
         identifier, architecture, version, pool, listen, port))
 
+
+@click.command("receive", help="Receive subvolume over multicast")
+@click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
+def multicast_receive(pool):
+    cmd = "udp-receiver", "--nokbd"
+    udpcast = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    pool = Pool(pool)
+    btrfs = subprocess.Popen(pool.command_receive(), stdin=udpcast.stdout)
+    udpcast.wait()
+
+@click.command("send", help="Send subvolume over multicast")
+@click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
+@click.option("-c", "--category", default="@template", help="Subvolume type")
+@click.option("-n", "--namespace", required=True, help="Namespace")
+@click.option("-i", "--identifier", required=True, help="Identifier")
+@click.option("-a", "--architecture", required=True, help="Architecture")
+@click.option("-v", "--version", required=True, help="Version")
+def multicast_send(pool, category, namespace, identifier, architecture, version):
+    pool = Pool(pool)
+    btrfs = subprocess.Popen(pool.command_send("%s:%s.%s:%s:%s" % (category, namespace, identifier, architecture, version)), stdout=subprocess.PIPE)
+    cmd = "udp-sender", "--nokbd", "--no-progress", "--min-receivers", "1", "--min-wait", "5"
+    udpcast = subprocess.Popen(cmd, stdin=btrfs.stdout)
+    btrfs.wait()
+
+@click.group(help="Receive or serve over multicast")
+def multicast():
+    pass
+
+@click.group(help="Serve HTTP API")
+def http():
+    pass
 
 @click.group()
 def cli():
     pass
 
+multicast.add_command(multicast_receive)
+multicast.add_command(multicast_send)
+http.add_command(http_serve)
 cli.add_command(pull)
 cli.add_command(push)
 cli.add_command(list)
-cli.add_command(serve)
+cli.add_command(multicast)
+cli.add_command(http)
 
 if __name__ == "__main__":
     cli()
