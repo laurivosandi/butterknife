@@ -23,6 +23,9 @@ class Template(object):
     def __gt__(self, other):
         return self.o > other.o
 
+    def __hash__(self):
+        return hash(repr(self))
+
 class Pool(object):
     def __init__(self, address):
         o = urlparse(address)
@@ -43,6 +46,24 @@ class Pool(object):
             self.path = o.path
         else:
             self.path = "/var/butterknife/pool"
+        if not self.path.endswith("/"):
+            self.path += "/"
+
+    def __str__(self):
+        url = ""
+        if self.scheme != "file":
+            url += self.scheme + "://"
+        if self.username:
+            url += "%s@" % self.username
+        if self.hostname:
+            url += self.hostname
+        if self.port:
+            url += ":%d" % self.port
+        if self.path != "/var/butterknife/pool/":
+            url += self.path
+        elif self.scheme != "file":
+            url += "/"
+        return url
 
     def command_receive(self):
         if self.scheme == "file":
@@ -67,6 +88,18 @@ class Pool(object):
             return cmd
         else:
             raise Exception("Unable to receive to transport %s" % self.scheme)
+
+    def filter_subvols(self, category="@template", namespace="*", identifier="*", architecture="*", version="*"):
+        for entry in self.list_templates():
+            if namespace != "*" and entry.namespace != namespace:
+                continue
+            if identifier != "*" and entry.identifier != identifier:
+                continue
+            if architecture != "*" and entry.architecture != architecture:
+                continue
+            if version != "*" and entry.version != version:
+                continue
+            yield entry
 
     def list_templates(self):
         if self.scheme == "file":
@@ -121,10 +154,17 @@ def pull(source, destination, category, namespace, identifier, arch, version):
 @click.option("-i", "--identifier", default="*", help="Template identifier")
 @click.option("-a", "--architecture", default="*", help="Architecture")
 @click.option("-v", "--version", default="*", help="Version")
-def push(source, destination, category, namespace, identifier, arch, version):
+def push(source, destination, category, namespace, identifier, architecture, version):
     click.echo("Pushing %s:%s.%s:%s:%s from %s to %s" % (category, namespace,
         identifier, architecture, version, source, destination))
 
+
+
+    source = Pool(source)
+    dest = Pool(destination)
+    click.echo("KOHALIKUD: %s" % set(source.list_templates()))
+    click.echo("KAUGED: %s" % set(dest.list_templates()))
+#    click.echo("Puljong:%s" % set(source.list_templates()).intersection(set(dest.list_templates())))
 
 @click.command(help="List local or remote subvolumes")
 @click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
@@ -133,19 +173,11 @@ def push(source, destination, category, namespace, identifier, arch, version):
 @click.option("-i", "--identifier", default="*", help="Template identifier")
 @click.option("-a", "--architecture", default="*", help="Architecture")
 @click.option("-v", "--version", default="*", help="Version")
-def list(pool, category, namespace, identifier, architecture, version):
-    click.echo("Listing %s:%s.%s:%s:%s in %s" % (category, namespace, identifier, architecture, version, pool))
+def list(pool, **kwargs):
+    click.echo("Listing %(category)s:%(namespace)s.%(identifier)s:%(architecture)s:%(version)s" % kwargs)
     pool = Pool(pool)
-    for template in sorted(pool.list_templates()):
-        if namespace != "*" and template.namespace != namespace:
-            continue
-        if identifier != "*" and template.identifier != identifier:
-            continue
-        if architecture != "*" and template.architecture != architecture:
-            continue
-        if version != "*" and template.version != version:
-            continue
-        click.echo(template)
+    for template in sorted(pool.filter_subvols(**kwargs)):
+        click.echo("%s%s" % (pool, template))
 
 @click.command("serve", help="Run built-in HTTP API server")
 @click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
@@ -178,6 +210,7 @@ def multicast_receive(pool):
 @click.option("-i", "--identifier", required=True, help="Identifier")
 @click.option("-a", "--architecture", required=True, help="Architecture")
 @click.option("-v", "--version", required=True, help="Version")
+@click.option("-m", "--min-wait", default=5, help="Wait until t seconds since first receiver connection has passed")
 def multicast_send(pool, category, namespace, identifier, architecture, version):
     pool = Pool(pool)
     btrfs = subprocess.Popen(pool.command_send("%s:%s.%s:%s:%s" % (category, namespace, identifier, architecture, version)), stdout=subprocess.PIPE)
