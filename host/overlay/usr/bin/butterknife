@@ -109,6 +109,10 @@ class Pool(object):
 
         print("command_send:", " ".join(cmd))
         return cmd
+        
+    def filter_names(self, **kwargs):
+        for entry in self.filter_subvols(**kwargs):
+            yield entry.namespace, entry.identifier
 
     def filter_templates(self, **kwargs):
         for entry in self.filter_subvols(**kwargs):
@@ -236,7 +240,6 @@ def list(pool, **kwargs):
 
 @click.command("serve", help="Run built-in HTTP API server")
 @click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
-@click.option("-c", "--category", default="@template", help="Subvolume type")
 @click.option("-n", "--namespace", default="*", help="Template namespace")
 @click.option("-i", "--identifier", default="*", help="Template identifier")
 @click.option("-a", "--architecture", default="*", help="Architecture")
@@ -244,9 +247,139 @@ def list(pool, **kwargs):
 @click.option("-u", "--user", default="root", help="Run as user")
 @click.option("-p", "--port", default=80, help="Listen port")
 @click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
-def http_serve(pool, category, namespace, identifier, architecture, version, user, port, listen):
-    click.echo("Serving %s:%s.%s:%s:%s from %s at %s:%d" % (category, namespace,
+def http_serve(pool, namespace, identifier, architecture, version, user, port, listen):
+    click.echo("Serving @template:%s.%s:%s:%s from %s at %s:%d" % (namespace,
         identifier, architecture, version, pool, listen, port))
+
+    pool = Pool(pool)
+    
+    import falcon
+    import unicodedata
+    import json
+    import pwd
+    from datetime import date, datetime
+
+    _, _, uid, gid, gecos, root, shell = pwd.getpwnam(user)
+    sudoer = os.path.join("/etc/sudoers.d", user)
+
+    class MyEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, datetime):
+                return obj.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + "Z"
+            if isinstance(obj, date):
+                return obj.strftime('%Y-%m-%d')
+            if isinstance(obj, map):
+                return tuple(obj)
+            if isinstance(obj, Template):
+                return obj.version
+            return json.JSONEncoder.default(self, obj)
+
+    def serialize(func):
+        """
+        Falcon response serialization
+        """
+        def wrapped(instance, req, resp, **kwargs):
+            assert not req.get_param("unicode") or req.get_param("unicode") == u"✓", "Unicode sanity check failed"
+
+            # Default to no caching of API calls
+            resp.set_header("Cache-Control", "no-cache, no-store, must-revalidate");
+            resp.set_header("Pragma", "no-cache");
+            resp.set_header("Expires", "0");
+
+            r = func(instance, req, resp, **kwargs)
+
+            if not resp.body:
+                if not req.client_accepts_json:
+                    raise falcon.HTTPUnsupportedMediaType(
+                        'This API only supports the JSON media type.',
+                        href='http://docs.examples.com/api/json')
+                resp.set_header('Content-Type', 'application/json')
+                resp.body = json.dumps(r, cls=MyEncoder)
+            return r
+
+        # Pipe API docs
+        wrapped._apidoc = getattr(func, "_apidoc", {})
+        wrapped.__doc__ = func.__doc__
+        return wrapped
+
+    class TemplateResource(object):
+        @serialize
+        def on_get(self, req, resp):
+            return {"templates": map(
+                lambda ab:{"namespace": ab[0], "identifier":ab[1]},
+                set(pool.filter_names(namespace=namespace, identifier=identifier)))}
+
+    class VersionResource(object):
+        @serialize
+        def on_get(self, req, resp, name, arch):
+            namespace, identifier = name.rsplit(".", 1)
+            return { "versions": map(
+                lambda v:{"identifier":v},
+                sorted(pool.filter_subvols(namespace=namespace, identifier=identifier, architecture=arch), reverse=True, key=lambda j:j.numeric_version)) }
+
+    class StreamingResource(object):
+        def on_get(self, req, resp, name, arch, version):
+
+            parent_version = req.get_param("parent")
+            
+            subvol = "@template:%(name)s:%(arch)s:%(version)s" % locals()
+            
+            suggested_filename = "%(name)s:%(arch)s:%(version)s" % locals()
+            if parent_version:
+                parent_subvol = "@template:%(name)s:%(arch)s:%(parent_version)s" % locals()
+                suggested_filename += ":" + parent_version
+            else:
+                parent_subvol = None
+            suggested_filename += ".far"
+
+            resp.set_header("Content-Disposition", "attachment; filename=\"%s\"" % suggested_filename)
+            resp.set_header('Content-Type', 'application/btrfs-stream')
+
+#            if uid:
+#                cmd = ("sudo",) + cmd
+
+            streamer = subprocess.Popen(pool.command_send(subvol, parent_subvol), stdout=subprocess.PIPE)
+            resp.stream = streamer.stdout
+
+            accepted_encodings = req.get_header("Accept-Encoding") or ""
+            accepted_encodings = [j.strip() for j in accepted_encodings.lower().split(",")]
+
+            if "gzip" in accepted_encodings:
+                for cmd in "/usr/bin/pigz", "/bin/gzip":
+                    if os.path.exists(cmd):
+                        resp.set_header('Content-Encoding', 'gzip')
+                        print("Compressing with %s" % cmd)
+                        compressor = subprocess.Popen((cmd,), stdin=streamer.stdout, stdout=subprocess.PIPE)
+                        resp.stream = compressor.stdout
+                        break
+                else:
+                    print("No gzip compressors found, falling back to no compression")
+            else:
+                print("Client did not ask for compression")
+
+    app = falcon.API()
+    app.add_route("/api/template/", TemplateResource())
+    app.add_route("/api/template/{name}/arch/{arch}/version/", VersionResource())
+    app.add_route("/api/template/{name}/arch/{arch}/version/{version}/stream/", StreamingResource())
+
+    from wsgiref.simple_server import make_server, WSGIServer
+    from socketserver import ThreadingMixIn
+
+    class ThreadingWSGIServer(ThreadingMixIn, WSGIServer): 
+        pass
+
+    if uid == 0:
+        print("Warning: running as root, this is not reccommended")
+    elif not os.path.exists(sudoer):
+        print("Please create %s with following content: %s ALL=(ALL) NOPASSWD: /sbin/btrfs send /var/butterknife/pool/@template:*" % (sudoer, user))
+
+    print("Listening on %s:%d" % (listen, port))
+    httpd = make_server(listen, port, app, ThreadingWSGIServer)
+    if uid:
+        print("Switching to user %s (uid=%d, gid=%d)" % (user, uid, gid))
+        os.setgid(gid)
+        os.setuid(uid)
+    httpd.serve_forever()
 
 
 @click.command("receive", help="Receive subvolume over multicast")
