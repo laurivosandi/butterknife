@@ -1,4 +1,9 @@
 #!/bin/sh
+
+if [ -f /etc/motd ]; then
+    cat /etc/motd
+fi
+
 # Note that /dev should be handled by devtmpfs
 # Make sure this file will be executable
 
@@ -46,14 +51,12 @@ while [ 1 ]; do
         ;;
         provision)
             butterknife-provision
-            sh
-            umount /mnt/pool/dev/pts/
-            umount /mnt/pool/sys/
-            umount /mnt/pool/proc/
-            umount /mnt/pool/
+            read -p "Press Enter to continue..."
         ;;
         advanced)
             butterknife-advanced-options
         ;;
     esac
+
+    umount /var/butterknife/pool
 done
