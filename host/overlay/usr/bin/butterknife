@@ -13,15 +13,23 @@ class Template(object):
         subvol = os.path.basename(self.o.path)
         _, fqn, self.architecture, self.version = subvol.split(":")
         self.namespace, self.identifier = fqn.rsplit(".", 1)
+        assert self.version.startswith("snap")
+        self.numeric_version = int(self.version[4:])
 
     def __repr__(self):
+        return str(self)
+
+    def __str__(self):
         return "@template:%s.%s:%s:%s" % (self.namespace, self.identifier, self.architecture, self.version)
 
     def __eq__(self, other):
-        return self.o == other.o
+        return repr(self) == repr(other)
 
     def __gt__(self, other):
-        return self.o > other.o
+        return self.numeric_version > other.numeric_version
+
+    def __gt__(self, other):
+        return self.numeric_version > other.numeric_version
 
     def __hash__(self):
         return hash(repr(self))
@@ -65,32 +73,49 @@ class Pool(object):
             url += "/"
         return url
 
-    def command_receive(self):
+    def command_receive(self, parent_subvol=None):
+        cmd = "/home/lauri/Projektid/btrfs-progs/btrfs", "receive", self.path
+
         if self.scheme == "file":
-            return "btrfs", "receive", self.path
-        if self.scheme == "ssh":
-            cmd = "ssh", (self.username + "@" if self.username else "") + self.hostname,
+            prefix = ()
+        elif self.scheme == "ssh":
+            prefix = "ssh", (self.username + "@" if self.username else "") + self.hostname,
             if self.port:
-                cmd = cmd + ("-p", self.port)
-            cmd += "btrfs", "receive", path
-            return cmd
+                prefix += "-p", self.port
+
         else:
             raise Exception("Unable to receive to transport %s" % self.scheme)
 
-    def command_send(self, subvol):
+        if parent_subvol:
+            cmd += "-p", os.path.join(self.path, str(parent_subvol))
+
+        print("command_receiv:", " ".join(cmd))
+        return prefix + cmd
+
+
+    def command_send(self, subvol, parent_subvol=None):
         if self.scheme == "file":
-            return "btrfs", "send", os.path.join(self.path, subvol)
-        if self.scheme == "ssh":
+            cmd = "btrfs", "send", os.path.join(self.path, str(subvol))
+        elif self.scheme == "ssh":
             cmd = "ssh", (self.username + "@" if self.username else "") + self.hostname,
             if self.port:
                 cmd = cmd + ("-p", self.port)
-            cmd += "btrfs", "send", os.path.join(self.path, subvol)
-            return cmd
+            cmd += "btrfs", "send", os.path.join(self.path, str(subvol))
         else:
             raise Exception("Unable to receive to transport %s" % self.scheme)
+
+        if parent_subvol:
+            cmd += "-p", os.path.join(self.path, str(parent_subvol))
+
+        print("command_send:", " ".join(cmd))
+        return cmd
+
+    def filter_templates(self, **kwargs):
+        for entry in self.filter_subvols(**kwargs):
+            yield entry.namespace, entry.identifier, entry.architecture
 
     def filter_subvols(self, category="@template", namespace="*", identifier="*", architecture="*", version="*"):
-        for entry in self.list_templates():
+        for entry in self.list_subvols():
             if namespace != "*" and entry.namespace != namespace:
                 continue
             if identifier != "*" and entry.identifier != identifier:
@@ -101,7 +126,7 @@ class Pool(object):
                 continue
             yield entry
 
-    def list_templates(self):
+    def list_subvols(self):
         if self.scheme == "file":
             path = self.path or "/var/butterknife/pool/"
             print("Listing local templates in %s" % path)
@@ -109,7 +134,6 @@ class Pool(object):
                 if entry.startswith("@template:"):
                     yield Template("file://%s/%s" % (path, entry))
         elif self.scheme == "ssh":
-
             cmd = "ssh", (self.username + "@" if self.username else "") + self.hostname,
             if self.port:
                 cmd = cmd + ("-p", self.port)
@@ -132,19 +156,54 @@ class Pool(object):
         else:
             raise
 
-@click.command(help="Pull subvolumes")
+
+@click.command(help="Pull templates")
 @click.option("--source", required=True, help="Source pool")
 @click.option("--destination", default="file://", help="Target pool")
-@click.option("-c", "--category", default="@template", help="Subvolume type")
 @click.option("-n", "--namespace", default="*", help="Template namespace")
 @click.option("-i", "--identifier", default="*", help="Template identifier")
 @click.option("-a", "--architecture", default="*", help="Architecture")
 @click.option("-v", "--version", default="*", help="Version")
-def pull(source, destination, category, namespace, identifier, arch, version):
-    click.echo("Pushing %s:%s.%s:%s:%s from %s to %s" % (category, namespace,
+def pull(source, destination, namespace, identifier, architecture, version):
+    click.echo("Pushing @template:%s.%s:%s:%s from %s to %s" % (namespace,
         identifier, architecture, version, source, destination))
-    pool = Pool(source)
-    pool.list_templates()
+
+    source = Pool(source)
+    dest = Pool(destination)
+
+    for n, i, a in set(source.filter_templates(namespace=namespace, identifier=identifier, architecture=architecture)):
+        remote_subvols = sorted(source.filter_subvols(namespace=n, identifier=i, architecture=a))
+        local_subvols = sorted(dest.filter_subvols(namespace=n, identifier=i, architecture=a))
+
+        click.echo("%d remote subvolumes of %s.%s:%s" % (len(remote_subvols), n,i,a))
+        click.echo("%d local subvolumes of %s.%s:%s" % (len(local_subvols), n,i,a))
+        
+        common_subvols = set(remote_subvols).intersection(set(local_subvols))
+
+        if common_subvols:
+            parent_subvol = sorted(common_subvols)[-1]
+            click.echo("Last common subvol is: %s" % parent_subvol)
+            following_subvols = tuple(filter(lambda subvol: subvol > parent_subvol, remote_subvols))
+        else:
+            parent_subvol = None
+            following_subvols = remote_subvols
+            click.echo("No shared subvolumes!")
+
+        if not following_subvols:
+            click.echo("All versions of %s.%s:%s synchronized, skipping!" % (n,i,a))
+            continue
+
+        for subvol in following_subvols:
+            if parent_subvol:
+                click.echo("Fetching incremental snapshot %s relative to %s" % (subvol.version, parent_subvol.version))
+            else:
+                click.echo("Fetching full snapshot %s" % subvol.version)
+            btrfs_send = subprocess.Popen(source.command_send(subvol, parent_subvol), stdout=subprocess.PIPE, close_fds=True)
+            pv = subprocess.Popen(("pv",), stdin=btrfs_send.stdout, stdout=subprocess.PIPE, close_fds=True)
+            btrfs_receive = subprocess.Popen(dest.command_receive(parent_subvol), stdin=pv.stdout, close_fds=True)
+            btrfs_receive.communicate()
+            parent_subvol = subvol
+            click.echo("")
 
 @click.command(help="Push subvolumes")
 @click.option("--source", default="file://", help="Source pool")
@@ -158,13 +217,9 @@ def push(source, destination, category, namespace, identifier, architecture, ver
     click.echo("Pushing %s:%s.%s:%s:%s from %s to %s" % (category, namespace,
         identifier, architecture, version, source, destination))
 
-
-
     source = Pool(source)
     dest = Pool(destination)
-    click.echo("KOHALIKUD: %s" % set(source.list_templates()))
-    click.echo("KAUGED: %s" % set(dest.list_templates()))
-#    click.echo("Puljong:%s" % set(source.list_templates()).intersection(set(dest.list_templates())))
+    raise NotImplementedError()
 
 @click.command(help="List local or remote subvolumes")
 @click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
