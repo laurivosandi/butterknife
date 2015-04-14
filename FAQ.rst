@@ -28,6 +28,7 @@ Using just Puppet etc means that all the workstations have to pull the individua
 packages causing whole lot of traffic on the network not to talk about the
 time spent on bootstrapping a machine.
 
+
 Can I run the infrastructure on my own?
 ---------------------------------------
 
@@ -72,4 +73,6 @@ Butterknife attempts to provide atomic updates
 for workstations and at the same time remain compatible
 with already existing operating systems such as Ubuntu,
 Fedora, Red Hat etc.
+
+
 
