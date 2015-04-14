@@ -3,6 +3,8 @@ Butterknife command-line utility
 
 Install dependencies:
 
+.. code:: bash
+
     sudo apt-get install python3-pip python3-lxc pigz btrfs-progs
     sudo pip3 install falcon click
 
@@ -42,6 +44,7 @@ Of course you can apply filters:
 
     butterknife pull --source ssh://hostname --architecture x86 --namespace com.koodur.butterknife
     
+Note that symmetric push/pull requires patched btrfs-progs which has additional -p flag for btrfs receive.
 
 Multicast
 ---------
