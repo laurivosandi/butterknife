@@ -46,6 +46,9 @@ do
             mount --bind /dev $instance_mountpoint/dev
             mount --bind /sys $instance_mountpoint/sys
             mount --bind /proc $instance_mountpoint/proc
+            if [ -d $instance_mountpoint/var/butterknife/persistent ]; then
+                mount --bind /proc $instance_mountpoint/var/butterknife/persistent
+            fi
             clear
             echo "Mounted $BUTTERKNIFE_PARTITION$BUTTERKNIFE_DEPLOY_SUBVOL at $instance_mountpoint"
             echo "Chrooting into $instance_mountpoint"
@@ -55,6 +58,9 @@ do
             umount $instance_mountpoint/dev
             umount $instance_mountpoint/sys
             umount $instance_mountpoint/proc
+            if [ -d $instance_mountpoint/var/butterknife/persistent ]; then
+                umount $instance_mountpoint/var/butterknife/persistent
+            fi
             echo "Unmounting $instance_mountpoint"
             umount $instance_mountpoint
             rmdir $instance_mountpoint

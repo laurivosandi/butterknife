@@ -270,7 +270,7 @@ case $TRANSFER_METHOD in
         #####################################
 
         # Build btrfs-stream URL
-        STREAM="$bk_url/template/$bk_template/arch/$bk_arch/version/$bk_version/stream?src="
+        STREAM="$bk_url/template/$bk_template/arch/$bk_arch/version/$bk_version/stream/"
     ;;
 esac
 
@@ -281,17 +281,16 @@ esac
 
 case $TRANSFER_METHOD in
     http)
-        # Determine differential version parents
+        # Determine differential version parent
         cat /tmp/available_versions.json | jq -r '.versions[] .identifier' > /tmp/available_version_names
         ls $POOL_MOUNTPOINT | (grep "^@template:$bk_template:$bk_arch:" || true) | cut -d ":" -f 4 > /tmp/local_version_names
-        cat /tmp/local_version_names /tmp/available_version_names > /tmp/merged_version_names
-
-        PARENTS=$(cat /tmp/merged_version_names | sort | grep -v $bk_version | uniq -d)
-
-        for parent in $PARENTS; do
-            STREAM="$STREAM$parent,"
-        done
-
+        PARENT=$(cat /tmp/local_version_names /tmp/available_version_names | sort | grep -v $bk_version | uniq -d | sort -r | head -n 1)
+        if [ -z $PARENT ]; then
+            echo "Could not determine parent, falling back to full snapshot"
+        else
+            STREAM="$STREAM?parent=$PARENT"
+            PARENT_ARG="-p $POOL_MOUNTPOINT/@template:$bk_template:$bk_arch:$PARENT"
+        fi
         echo "Final URL is $STREAM"
     ;;
 esac
@@ -314,8 +313,7 @@ esac
 case $TRANSFER_METHOD in
     multicast)
         ls $POOL_MOUNTPOINT | (grep "^@template:" || true) > /tmp/local_templates
-        udp-receiver --nokbd \
-            | btrfs receive $POOL_MOUNTPOINT/
+        udp-receiver --nokbd | btrfs receive $POOL_MOUNTPOINT $PARENT_ARG
         # Heuristics to determine name of received snapshot
         ls $POOL_MOUNTPOINT | (grep "^@template:" || true) > /tmp/new_templates
         bk_template_subvol=$(cat /tmp/local_templates /tmp/new_templates | sort | uniq -u)
@@ -325,13 +323,12 @@ case $TRANSFER_METHOD in
         bk_version=$(echo $bk_template_subvol | cut -d ":" -f 4)
     ;;
     http)
-        curl -A $AGENT $STREAM \
-            | btrfs receive $POOL_MOUNTPOINT/
+        curl -A $AGENT $STREAM | btrfs receive $POOL_MOUNTPOINT $PARENT_ARG
     ;;
     tee)
         dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
         mkfifo /tmp/multicast_stream /tmp/local_stream
-        cat /tmp/local_stream | btrfs receive $POOL_MOUNTPOINT/ &
+        cat /tmp/local_stream | btrfs receive $POOL_MOUNTPOINT $PARENT_ARG &
         sleep 1
         udp-sender --nokbd --no-progress --min-receivers 1 --min-wait 5 /tmp/multicast_stream &
         sleep 1
