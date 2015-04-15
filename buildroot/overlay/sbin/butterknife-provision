@@ -284,7 +284,7 @@ case $TRANSFER_METHOD in
         # Determine differential version parent
         cat /tmp/available_versions.json | jq -r '.versions[] .identifier' > /tmp/available_version_names
         ls $POOL_MOUNTPOINT | (grep "^@template:$bk_template:$bk_arch:" || true) | cut -d ":" -f 4 > /tmp/local_version_names
-        PARENT=$(cat /tmp/local_version_names /tmp/available_version_names | sort | grep -v $bk_version | uniq -d | sort -r | head -n 1)
+        PARENT=$(cat /tmp/local_version_names /tmp/available_version_names | sort | grep -v $bk_version | uniq -d | sort -t p -k 2n | tail -n 1)
         if [ -z $PARENT ]; then
             echo "Could not determine parent, falling back to full snapshot"
         else
