@@ -200,18 +200,20 @@ class Filter(object):
         self.namespace, self.identifier = name.rsplit(".", 1)
 
     def match(self, subvol):
-            
-#        namespace, identifier = name.rsplit(".", 1)
-
         if self.category != "*" and self.category != subvol.category:
+#            print("Category %s fails filter %s" % (self.category, subvol.category))
             return False
         if self.namespace != "*" and self.namespace != subvol.namespace:
+#            print("Namespace %s fails filter %s" % (self.namespace, subvol.namespace))
             return False
         if self.identifier != "*" and self.identifier != subvol.identifier: # TODO: specify ,
+#            print("Identifier %s fails filter %s" % (self.identifier, subvol.identifier))
             return False
         if self.architecture != "*" and self.architecture != subvol.architecture: # TODO: specify ,
+#            print("Architecture %s fails filter %s" % (self.architecture, subvol.architecture))
             return False
         if self.version != "*" and self.version != subvol.version: # TODO: specify , and  -
+#            print("Version %s fails filter %s" % (self.version, subvol.version))
             return False
         return True
 
@@ -234,11 +236,9 @@ class Filter(object):
 @click.option("-u", "--user", default="root", help="Run as user")
 @click.option("-p", "--port", default=80, help="Listen port")
 @click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
-def http_serve(match, user, port, listen):
+def http_serve(subvol, user, port, listen):
     subvol_filter = Filter(subvol)
- 
     pool = LocalPool()
-
     click.echo("Serving %s from %s at %s:%d" % (subvol, pool, listen, port))
   
     import falcon
@@ -246,7 +246,6 @@ def http_serve(match, user, port, listen):
     import json
     import pwd
     from datetime import date, datetime
-
 
     class MyEncoder(json.JSONEncoder):
         def default(self, obj):
@@ -256,7 +255,7 @@ def http_serve(match, user, port, listen):
                 return obj.strftime('%Y-%m-%d')
             if isinstance(obj, map):
                 return tuple(obj)
-            if isinstance(obj, Template):
+            if isinstance(obj, Subvol):
                 return obj.version
             return json.JSONEncoder.default(self, obj)
 
@@ -291,9 +290,11 @@ def http_serve(match, user, port, listen):
         @serialize
         def on_get(self, req, resp, name, arch):
             namespace, identifier = name.rsplit(".", 1)
+            subset_filter = subvol_filter.subset(namespace=namespace,
+                identifier=identifier, architecture=arch)
             return { "versions": map(
                 lambda v:{"identifier":v},
-                sorted(subvol_filter.apply(pool.subvol_list()), reverse=True, key=lambda j:j.numeric_version)) }
+                sorted(subset_filter.apply(pool.subvol_list()), reverse=True, key=lambda j:j.numeric_version)) }
 
     class StreamingResource(object):
         def on_get(self, req, resp, name, arch, version):
@@ -301,12 +302,13 @@ def http_serve(match, user, port, listen):
             parent_version = req.get_param("parent")
             
             subvol = "@template:%(name)s:%(arch)s:%(version)s" % locals()
-            if subvol_filter.match(subvol): raise
+            if not subvol_filter.match(Subvol(subvol)):
+                raise Exception("Not going to happen")
             
             suggested_filename = "%(name)s:%(arch)s:%(version)s" % locals()
             if parent_version:
                 parent_subvol = "@template:%(name)s:%(arch)s:%(parent_version)s" % locals()
-                if subvol_filter.match(parent_subvol): raise
+                if not subvol_filter.match(Subvol(parent_subvol)): raise
                 suggested_filename += ":" + parent_version
             else:
                 parent_subvol = None
@@ -315,7 +317,7 @@ def http_serve(match, user, port, listen):
             resp.set_header("Content-Disposition", "attachment; filename=\"%s\"" % suggested_filename)
             resp.set_header('Content-Type', 'application/btrfs-stream')
 
-            streamer = subprocess.Popen(pool.command_send(subvol, parent_subvol), stdout=subprocess.PIPE)
+            streamer = pool.send(subvol, parent_subvol)
             resp.stream = streamer.stdout
 
             accepted_encodings = req.get_header("Accept-Encoding") or ""
