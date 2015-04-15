@@ -53,16 +53,17 @@ Sending local template via multicast:
 
 .. code:: bash
 
-    butterknife multicast --namespace org.example --identifier TemplateName --arch x86 --version snap0
+    butterknife multicast send @template\:com.koodur.butterknife.Ubuntu\:x86_64\:snap7
+
+You can even multicast a remote subvolume:
+
+.. code:: bash
+
+    butterknife multicast send @template\:com.koodur.butterknife.Ubuntu\:x86_64\:snap7 --pool ssh://hostname
 
 Receiving to local pool at /var/butterknife/pool:
 
 .. code:: bash
 
     butterknife multicast receive
-    
-You can even multicast a remote subvolume:
 
-.. code:: bash
-
-    butterknife multicast send @template\:com.koodur.butterknife.Ubuntu\:x86_64\:snap7 --pool ssh://hostname
