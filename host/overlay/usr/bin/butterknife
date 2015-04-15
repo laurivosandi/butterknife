@@ -7,11 +7,9 @@ import urllib.request
 import configparser
 import subprocess
 
-class Template(object):
-    def __init__(self, address):
-        self.o = urlparse(address)
-        subvol = os.path.basename(self.o.path)
-        _, fqn, self.architecture, self.version = subvol.split(":")
+class Subvol(object):
+    def __init__(self, subvol):
+        self.category, fqn, self.architecture, self.version = subvol.split(":")
         self.namespace, self.identifier = fqn.rsplit(".", 1)
         assert self.version.startswith("snap")
         self.numeric_version = int(self.version[4:])
@@ -20,7 +18,7 @@ class Template(object):
         return str(self)
 
     def __str__(self):
-        return "@template:%s.%s:%s:%s" % (self.namespace, self.identifier, self.architecture, self.version)
+        return "%s:%s.%s:%s:%s" % (self.category, self.namespace, self.identifier, self.architecture, self.version)
 
     def __eq__(self, other):
         return repr(self) == repr(other)
@@ -44,26 +42,24 @@ class LocalPool(object):
         
     def template_list(self, f=None):
         templates = {}
-        for entry in self.subvol_list():
-            if f and not f.check(entry):
+        for s in self.subvol_list():
+            if f and not f.match(s):
                 continue
-            category, fqn, arch, version = entry.split(":")
-            namespace, identifier = fqn.rsplit(".", 1)
-            templates[(namespace, identifier)] = templates.get((namespace, identifier), set()).union({arch})
+            templates[(s.namespace, s.identifier)] = templates.get((s.namespace, s.identifier), set()).union({s.architecture})
             
         for (namespace, identifier), architectures in templates.items():
             yield namespace, identifier, tuple(architectures)
 
     def subvol_list(self):
-        return os.listdir(self.path)
+        return [Subvol(j) for j in os.listdir(self.path) if j.startswith("@template:")]
         
-    def receive(self, fh, subvol, parent=None):
+    def receive(self, fh, subvol, parent_subvol=None):
         cmd = "btrfs", "receive", os.path.join(self.path)
         if parent_subvol:
             cmd += "-p", os.path.join(self.path, str(parent_subvol))
-        return subprocess.Popen(cmd, stdin=fh)
+        return subprocess.Popen(cmd, stdin=fh, close_fds=True)
 
-    def send(self, subvol, parent=None):
+    def send(self, subvol, parent_subvol=None):
         cmd = "btrfs", "send", os.path.join(self.path, str(subvol))
         if parent_subvol:
             cmd += "-p", os.path.join(self.path, str(parent_subvol))
@@ -71,17 +67,24 @@ class LocalPool(object):
             cmd = ("sudo",) + cmd
         return subprocess.Popen(cmd, stdout=subprocess.PIPE, close_fds=True)
 
-class SecureShellPool(object):
-    def __init__(self, hostname, port=None, user=None, path="/var/butterknife/pool"):
+class WebPool(LocalPool):
+#            fh = urllib.request.urlopen("%s://%s/api/template/" % (self.scheme, self.hostname))
+#            for entry in json.loads(fh.read().decode("ascii"))["templates"]:
+#                yield "%(namespace)s.%(identifier)s" % entry
+    def receive(self, fh, subvol, parent_subvol=None):
+        raise NotImplementedError("Unable to push via HTTP/HTTPS")
+
+class SecureShellPool(LocalPool):
+    def __init__(self, hostname, port=None, user=None, path=None):
         self.hostname = hostname
         self.port = port 
-        self.path = path
         self.user = user
-        
+        self.path = path or "/var/butterknife/pool/"
+                
     def __str__(self):
         url = "ssh://"
-        if self.username:
-            url += "%s@" % self.username
+        if self.user:
+            url += "%s@" % self.user
         url += self.hostname
         if self.port:
             url += ":%d" % self.port
@@ -90,7 +93,7 @@ class SecureShellPool(object):
         return url
         
     def subvol_list(self):
-        return subprocess.check_output(self.prefix() + ("ls", self.path)).decode("utf-8").split("\n")
+        return [Subvol(j) for j in subprocess.check_output(self.prefix() + ("ls", self.path)).decode("utf-8").split("\n") if j.startswith("@template:")]
         
     def prefix(self):
         cmd = "ssh",
@@ -98,213 +101,96 @@ class SecureShellPool(object):
             cmd += "-p", self.port
         if self.user:
             cmd += self.user + "@"
-        return cmd + self.hostname
+        return cmd + (self.hostname,)
 
-    def receive(self, fh, subvol, parent=None):
+    def receive(self, fh, subvol, parent_subvol=None):
         cmd = self.prefix() + "btrfs", "receive", os.path.join(self.path)
         if parent_subvol:
             cmd += "-p", os.path.join(self.path, str(parent_subvol))
-        return subprocess.Popen(cmd, stdin=fh)
+        return subprocess.Popen(cmd, stdin=fh, close_fds=True)
 
-    def send(self, subvol, parent=None):
-        cmd = self.prefix() + "btrfs", "send", os.path.join(self.path, str(subvol))
+    def send(self, subvol, parent_subvol=None):
+        cmd = self.prefix() + ("btrfs", "send", os.path.join(self.path, str(subvol)))
         if parent_subvol:
             cmd += "-p", os.path.join(self.path, str(parent_subvol))
         return subprocess.Popen(cmd, stdout=subprocess.PIPE, close_fds=True)
         
 
-class Pool(object):
-    def __init__(self, address):
-        o = urlparse(address)
-        assert o.scheme in ("http", "https", "ssh", "file"), "Invalid transport %s" % o.scheme
-        if o.scheme == "file":
-            assert not o.netloc, "Username, hostname or port not supported for file:// transport"
-
+def pool_factory(url):
+    o = urlparse(url)
+    if o.scheme == "file":
+        assert not o.netloc, "Username, hostname or port not supported for file:// transport"
         assert not o.password
         assert not o.fragment
         assert not o.query
+        return LocalPool(o.path)
+    if o.scheme == "ssh":
+        return SecureShellPool(o.hostname, o.port, o.username, o.path)
 
-        self.scheme = o.scheme
-        self.port = o.port
-        self.username = o.username
-        self.hostname = o.hostname
+def push_pull(source, destination, subvol):
+    subvol_filter = Filter(subvol)
+    for namespace, identifier, architectures in source.template_list(subvol_filter):
+        for architecture in architectures:
+            click.echo("Processing %s.%s:%s" % (namespace, identifier, architecture))
+            subset_filter = subvol_filter.subset(
+                namespace=namespace, identifier=identifier, architecture=architecture)
+                
+            source_subvols = sorted(subset_filter.apply(source.subvol_list()))
+            destination_subvols = sorted(subset_filter.apply(destination.subvol_list()))
 
-        if o.path:
-            self.path = o.path
-        else:
-            self.path = "/var/butterknife/pool"
-        if not self.path.endswith("/"):
-            self.path += "/"
+            click.echo("%d subvolumes at %s" % (len(source_subvols), source))
+            click.echo("%d subvolumes at %s" % (len(destination_subvols), destination))
+            
+            common_subvols = set(source_subvols).intersection(set(destination_subvols))
 
-    def __str__(self):
-        url = ""
-        if self.scheme != "file":
-            url += self.scheme + "://"
-        if self.username:
-            url += "%s@" % self.username
-        if self.hostname:
-            url += self.hostname
-        if self.port:
-            url += ":%d" % self.port
-        if self.path != "/var/butterknife/pool/":
-            url += self.path
-        elif self.scheme != "file":
-            url += "/"
-        return url
-
-    def command_receive(self, parent_subvol=None):
-        cmd = "btrfs", "receive", self.path
-
-        if self.scheme == "file":
-            prefix = ()
-        elif self.scheme == "ssh":
-            prefix = "ssh", (self.username + "@" if self.username else "") + self.hostname,
-            if self.port:
-                prefix += "-p", self.port
-        else:
-            raise Exception("Unable to receive to transport %s" % self.scheme)
-
-        if parent_subvol:
-            cmd += "-p", os.path.join(self.path, str(parent_subvol))
-        return prefix + cmd
-
-    def command_send(self, subvol, parent_subvol=None):
-        if self.scheme == "file":
-            cmd = "btrfs", "send", os.path.join(self.path, str(subvol))
-        elif self.scheme == "ssh":
-            cmd = "ssh", (self.username + "@" if self.username else "") + self.hostname,
-            if self.port:
-                cmd = cmd + ("-p", self.port)
-            cmd += "btrfs", "send", os.path.join(self.path, str(subvol))
-        else:
-            raise Exception("Unable to receive to transport %s" % self.scheme)
-
-        if parent_subvol:
-            cmd += "-p", os.path.join(self.path, str(parent_subvol))
-        return cmd
-        
-    def filter_names(self, **kwargs):
-        for entry in self.filter_subvols(**kwargs):
-            yield entry.namespace, entry.identifier
-
-    def filter_templates(self, **kwargs):
-        for entry in self.filter_subvols(**kwargs):
-            yield entry.namespace, entry.identifier, entry.architecture
-
-    def filter_subvols(self, category="@template", namespace="*", identifier="*", architecture="*", version="*"):
-        for entry in self.list_subvols():
-            if namespace != "*" and entry.namespace != namespace:
-                continue
-            if identifier != "*" and entry.identifier != identifier:
-                continue
-            if architecture != "*" and entry.architecture != architecture:
-                continue
-            if version != "*" and entry.version != version:
-                continue
-            yield entry
-
-    def list_subvols(self):
-        if self.scheme == "file":
-            path = self.path or "/var/butterknife/pool/"
-            print("Listing local templates in %s" % path)
-            for entry in os.listdir(path):
-                if entry.startswith("@template:"):
-                    yield Template("file://%s/%s" % (path, entry))
-        elif self.scheme == "ssh":
-            cmd = "ssh", (self.username + "@" if self.username else "") + self.hostname,
-            if self.port:
-                cmd = cmd + ("-p", self.port)
-            cmd += "ls", self.path,
-            print("Executing:", " ".join(cmd))
-            for entry in subprocess.check_output(cmd).decode("utf-8").split("\n"):
-                if entry.startswith("@template:"):
-                    url = "ssh://"
-                    if self.username:
-                        url += self.u.username + "@"
-                    url += self.hostname
-                    if self.port:
-                        url += ":%d" % self.port
-                    url += self.path + "/" + entry
-                    yield Template(url)
-        elif self.scheme in ("http", "https"):
-            fh = urllib.request.urlopen("%s://%s/api/template/" % (self.scheme, self.hostname))
-            for entry in json.loads(fh.read().decode("ascii"))["templates"]:
-                yield "%(namespace)s.%(identifier)s" % entry
-        else:
-            raise
-
-
-@click.command(help="Pull templates")
-@click.option("--source", required=True, help="Source pool")
-@click.option("--destination", default="file://", help="Target pool")
-@click.option("-s", "--subvol", default="@template:*.*:*:*", help="Subvolume filter")
-def pull(source, destination, subvol):
-    click.echo("Pushing %s from %s to %s" % (subvol, source, destination))
-
-    source = Pool(source)
-    dest = Pool(destination)
-
-    for n, i, a in set(source.filter_templates(namespace=namespace, identifier=identifier, architecture=architecture)):
-        remote_subvols = sorted(source.filter_subvols(namespace=n, identifier=i, architecture=a))
-        local_subvols = sorted(dest.filter_subvols(namespace=n, identifier=i, architecture=a))
-
-        click.echo("%d remote subvolumes of %s.%s:%s" % (len(remote_subvols), n,i,a))
-        click.echo("%d local subvolumes of %s.%s:%s" % (len(local_subvols), n,i,a))
-        
-        common_subvols = set(remote_subvols).intersection(set(local_subvols))
-
-        if common_subvols:
-            parent_subvol = sorted(common_subvols)[-1]
-            click.echo("Last common subvol is: %s" % parent_subvol)
-            following_subvols = tuple(filter(lambda subvol: subvol > parent_subvol, remote_subvols))
-        else:
-            parent_subvol = None
-            following_subvols = remote_subvols
-            click.echo("No shared subvolumes!")
-
-        if not following_subvols:
-            click.echo("All versions of %s.%s:%s synchronized, skipping!" % (n,i,a))
-            continue
-
-        for subvol in following_subvols:
-            if parent_subvol:
-                click.echo("Fetching incremental snapshot %s relative to %s" % (subvol.version, parent_subvol.version))
+            if common_subvols:
+                parent_subvol = sorted(common_subvols)[-1]
+                click.echo("Last common subvol is: %s" % parent_subvol)
+                following_subvols = tuple(filter(lambda subvol: subvol > parent_subvol, destination_subvols))
             else:
-                click.echo("Fetching full snapshot %s" % subvol.version)
-            btrfs_send = subprocess.Popen(source.command_send(subvol, parent_subvol), stdout=subprocess.PIPE, close_fds=True)
-            pv = subprocess.Popen(("pv",), stdin=btrfs_send.stdout, stdout=subprocess.PIPE, close_fds=True)
-            btrfs_receive = subprocess.Popen(dest.command_receive(parent_subvol), stdin=pv.stdout, close_fds=True)
-            btrfs_receive.communicate()
-            parent_subvol = subvol
-            click.echo("")
+                parent_subvol = None
+                following_subvols = source_subvols
+                click.echo("No shared subvolumes!")
+
+            if not following_subvols:
+                click.echo("All versions of %s.%s:%s synchronized, skipping!" % (namespace, identifier, architecture))
+                continue
+
+            for subvol in following_subvols:
+                
+            
+                if parent_subvol:
+                    click.echo("Fetching incremental snapshot %s relative to %s" % (subvol.version, parent_subvol.version))
+                else:
+                    click.echo("Fetching full snapshot %s" % subvol.version)
+                btrfs_send = source.send(subvol, parent_subvol)
+                pv = subprocess.Popen(("pv",), stdin=btrfs_send.stdout, stdout=subprocess.PIPE, close_fds=True)
+                btrfs_receive = destination.receive(pv.stdout, parent_subvol)
+                btrfs_receive.communicate()
+                parent_subvol = subvol
+
+
+@click.command(help="Pull subvolumes")
+@click.argument("pool")
+@click.option("-s", "--subvol", default="@template:*.*:*:*", help="Subvolume filter")
+def pull(pool, subvol):
+    click.echo("Pulling %s from %s to local pool" % (subvol, pool))
+    push_pull(pool_factory(pool), LocalPool(), subvol)
 
 @click.command(help="Push subvolumes")
-@click.option("--source", default="file://", help="Source pool")
-@click.option("--destination", required=True, help="Destination pool")
-@click.option("-c", "--category", default="@template", help="Subvolume type")
-@click.option("-n", "--namespace", default="*", help="Template namespace")
-@click.option("-i", "--identifier", default="*", help="Template identifier")
-@click.option("-a", "--architecture", default="*", help="Architecture")
-@click.option("-v", "--version", default="*", help="Version")
-def push(source, destination, category, namespace, identifier, architecture, version):
-    click.echo("Pushing %s:%s.%s:%s:%s from %s to %s" % (category, namespace,
-        identifier, architecture, version, source, destination))
-
-    source = Pool(source)
-    dest = Pool(destination)
-    raise NotImplementedError()
+@click.argument("pool")
+@click.option("-s", "--subvol", default="@template:*.*:*:*", help="Subvolume filter")
+def push(pool, subvol):
+    click.echo("Pushing %s from local pool to %s" % (subvol, pool))
+    push_pull(LocalPool(), pool_factory(pool), subvol)
 
 @click.command(help="List local or remote subvolumes")
-@click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
-@click.option("-c", "--category", default="@template", help="Subvolume type")
-@click.option("-n", "--namespace", default="*", help="Template namespace")
-@click.option("-i", "--identifier", default="*", help="Template identifier")
-@click.option("-a", "--architecture", default="*", help="Architecture")
-@click.option("-v", "--version", default="*", help="Version")
-def list(pool, **kwargs):
-    click.echo("Listing %(category)s:%(namespace)s.%(identifier)s:%(architecture)s:%(version)s" % kwargs)
-    pool = Pool(pool)
-    for template in sorted(pool.filter_subvols(**kwargs)):
+@click.argument("pool", default="file://")
+@click.option("--subvol", default="@template:*.*:*:*", help="Subvolume filter")
+def list(subvol, pool):
+    click.echo("Listing %s in %s" % (subvol, pool))
+    pool = pool_factory(pool)
+    for template in Filter(subvol).apply(pool.subvol_list()):
         click.echo("%s%s" % (pool, template))
         
         
@@ -314,22 +200,18 @@ class Filter(object):
         self.namespace, self.identifier = name.rsplit(".", 1)
 
     def match(self, subvol):
-        try:
-            category, name, architecture, version = subvol.split(":")
-        except ValueError:
-            return False
             
-        namespace, identifier = name.rsplit(".", 1)
+#        namespace, identifier = name.rsplit(".", 1)
 
-        if self.category != "*" and self.category != category:
+        if self.category != "*" and self.category != subvol.category:
             return False
-        if self.namespace != "*" and self.namespace != namespace:
+        if self.namespace != "*" and self.namespace != subvol.namespace:
             return False
-        if self.identifier != "*" and self.identifier != identifier: # TODO: specify ,
+        if self.identifier != "*" and self.identifier != subvol.identifier: # TODO: specify ,
             return False
-        if self.architecture != "*" and self.architecture != architecture: # TODO: specify ,
+        if self.architecture != "*" and self.architecture != subvol.architecture: # TODO: specify ,
             return False
-        if self.version != "*" and self.version != version: # TODO: specify , and  -
+        if self.version != "*" and self.version != subvol.version: # TODO: specify , and  -
             return False
         return True
 
@@ -485,7 +367,7 @@ def http_serve(match, user, port, listen):
 def multicast_receive(pool):
     cmd = "udp-receiver", "--nokbd"
     udpcast = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    pool = Pool(pool)
+    pool = pool_factory(pool)
     btrfs = subprocess.Popen(pool.command_receive(), stdin=udpcast.stdout)
     udpcast.wait()
 
@@ -494,7 +376,7 @@ def multicast_receive(pool):
 @click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
 @click.option("-m", "--min-wait", default=5, help="Wait until t seconds since first receiver connection has passed")
 def multicast_send(subvol, pool, min_wait):
-    pool = Pool(pool)
+    pool = pool_factory(pool)
     btrfs = subprocess.Popen(pool.command_send(subvol), stdout=subprocess.PIPE)
     cmd = "udp-sender", "--nokbd", "--no-progress", "--min-receivers", "1", "--min-wait", str(min_wait)
     udpcast = subprocess.Popen(cmd, stdin=btrfs.stdout)
