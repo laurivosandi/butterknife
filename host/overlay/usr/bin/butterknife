@@ -57,6 +57,7 @@ class LocalPool(object):
         cmd = "btrfs", "receive", os.path.join(self.path)
         if parent_subvol:
             cmd += "-p", os.path.join(self.path, str(parent_subvol))
+        click.echo("Executing: %s" % " ".join(cmd))
         return subprocess.Popen(cmd, stdin=fh, close_fds=True)
 
     def send(self, subvol, parent_subvol=None):
@@ -146,11 +147,13 @@ def push_pull(source, destination, subvol):
             if common_subvols:
                 parent_subvol = sorted(common_subvols)[-1]
                 click.echo("Last common subvol is: %s" % parent_subvol)
-                following_subvols = tuple(filter(lambda subvol: subvol > parent_subvol, destination_subvols))
+                following_subvols = tuple(filter(lambda subvol: subvol.numeric_version > parent_subvol.numeric_version, source_subvols))
+                click.echo("Neet to get %d subvolumes" % len(following_subvols))
             else:
                 parent_subvol = None
                 following_subvols = source_subvols
                 click.echo("No shared subvolumes!")
+               
 
             if not following_subvols:
                 click.echo("All versions of %s.%s:%s synchronized, skipping!" % (namespace, identifier, architecture))
@@ -165,8 +168,10 @@ def push_pull(source, destination, subvol):
                     click.echo("Fetching full snapshot %s" % subvol.version)
                 btrfs_send = source.send(subvol, parent_subvol)
                 pv = subprocess.Popen(("pv",), stdin=btrfs_send.stdout, stdout=subprocess.PIPE, close_fds=True)
-                btrfs_receive = destination.receive(pv.stdout, parent_subvol)
+                btrfs_receive = destination.receive(pv.stdout, subvol, parent_subvol)
                 btrfs_receive.communicate()
+                if btrfs_receive.returncode or btrfs_send.returncode or pv.returncode:
+                    exit(255)
                 parent_subvol = subvol
 
 
