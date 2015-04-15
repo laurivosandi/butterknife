@@ -139,7 +139,7 @@ Use butterknife to take a snapshot of the LXC container:
 
 .. code:: bash
 
-    butterknife-release -n your-template
+    butterknife lxc release your-template
     
 Finally fire up the HTTP API:
 

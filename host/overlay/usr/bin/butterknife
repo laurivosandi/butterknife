@@ -4,7 +4,7 @@ import click
 from urllib.parse import urlparse
 import json
 import urllib.request
-
+import configparser
 import subprocess
 
 class Template(object):
@@ -33,6 +33,85 @@ class Template(object):
 
     def __hash__(self):
         return hash(repr(self))
+        
+        
+class LocalPool(object):
+    def __init__(self, path="/var/butterknife/pool"):
+        self.path = os.path.abspath(path)
+        
+    def __str__(self):
+        return "file://%s" % self.path
+        
+    def template_list(self, f=None):
+        templates = {}
+        for entry in self.subvol_list():
+            if f and not f.check(entry):
+                continue
+            category, fqn, arch, version = entry.split(":")
+            namespace, identifier = fqn.rsplit(".", 1)
+            templates[(namespace, identifier)] = templates.get((namespace, identifier), set()).union({arch})
+            
+        for (namespace, identifier), architectures in templates.items():
+            yield namespace, identifier, tuple(architectures)
+
+    def subvol_list(self):
+        return os.listdir(self.path)
+        
+    def receive(self, fh, subvol, parent=None):
+        cmd = "btrfs", "receive", os.path.join(self.path)
+        if parent_subvol:
+            cmd += "-p", os.path.join(self.path, str(parent_subvol))
+        return subprocess.Popen(cmd, stdin=fh)
+
+    def send(self, subvol, parent=None):
+        cmd = "btrfs", "send", os.path.join(self.path, str(subvol))
+        if parent_subvol:
+            cmd += "-p", os.path.join(self.path, str(parent_subvol))
+        if os.getuid() > 0:
+            cmd = ("sudo",) + cmd
+        return subprocess.Popen(cmd, stdout=subprocess.PIPE, close_fds=True)
+
+class SecureShellPool(object):
+    def __init__(self, hostname, port=None, user=None, path="/var/butterknife/pool"):
+        self.hostname = hostname
+        self.port = port 
+        self.path = path
+        self.user = user
+        
+    def __str__(self):
+        url = "ssh://"
+        if self.username:
+            url += "%s@" % self.username
+        url += self.hostname
+        if self.port:
+            url += ":%d" % self.port
+        if self.path != "/var/butterknife/pool/":
+            url += self.path
+        return url
+        
+    def subvol_list(self):
+        return subprocess.check_output(self.prefix() + ("ls", self.path)).decode("utf-8").split("\n")
+        
+    def prefix(self):
+        cmd = "ssh",
+        if self.port:
+            cmd += "-p", self.port
+        if self.user:
+            cmd += self.user + "@"
+        return cmd + self.hostname
+
+    def receive(self, fh, subvol, parent=None):
+        cmd = self.prefix() + "btrfs", "receive", os.path.join(self.path)
+        if parent_subvol:
+            cmd += "-p", os.path.join(self.path, str(parent_subvol))
+        return subprocess.Popen(cmd, stdin=fh)
+
+    def send(self, subvol, parent=None):
+        cmd = self.prefix() + "btrfs", "send", os.path.join(self.path, str(subvol))
+        if parent_subvol:
+            cmd += "-p", os.path.join(self.path, str(parent_subvol))
+        return subprocess.Popen(cmd, stdout=subprocess.PIPE, close_fds=True)
+        
 
 class Pool(object):
     def __init__(self, address):
@@ -74,7 +153,7 @@ class Pool(object):
         return url
 
     def command_receive(self, parent_subvol=None):
-        cmd = "/home/lauri/Projektid/btrfs-progs/btrfs", "receive", self.path
+        cmd = "btrfs", "receive", self.path
 
         if self.scheme == "file":
             prefix = ()
@@ -82,16 +161,12 @@ class Pool(object):
             prefix = "ssh", (self.username + "@" if self.username else "") + self.hostname,
             if self.port:
                 prefix += "-p", self.port
-
         else:
             raise Exception("Unable to receive to transport %s" % self.scheme)
 
         if parent_subvol:
             cmd += "-p", os.path.join(self.path, str(parent_subvol))
-
-        print("command_receiv:", " ".join(cmd))
         return prefix + cmd
-
 
     def command_send(self, subvol, parent_subvol=None):
         if self.scheme == "file":
@@ -106,8 +181,6 @@ class Pool(object):
 
         if parent_subvol:
             cmd += "-p", os.path.join(self.path, str(parent_subvol))
-
-        print("command_send:", " ".join(cmd))
         return cmd
         
     def filter_names(self, **kwargs):
@@ -164,13 +237,9 @@ class Pool(object):
 @click.command(help="Pull templates")
 @click.option("--source", required=True, help="Source pool")
 @click.option("--destination", default="file://", help="Target pool")
-@click.option("-n", "--namespace", default="*", help="Template namespace")
-@click.option("-i", "--identifier", default="*", help="Template identifier")
-@click.option("-a", "--architecture", default="*", help="Architecture")
-@click.option("-v", "--version", default="*", help="Version")
-def pull(source, destination, namespace, identifier, architecture, version):
-    click.echo("Pushing @template:%s.%s:%s:%s from %s to %s" % (namespace,
-        identifier, architecture, version, source, destination))
+@click.option("-s", "--subvol", default="@template:*.*:*:*", help="Subvolume filter")
+def pull(source, destination, subvol):
+    click.echo("Pushing %s from %s to %s" % (subvol, source, destination))
 
     source = Pool(source)
     dest = Pool(destination)
@@ -237,30 +306,65 @@ def list(pool, **kwargs):
     pool = Pool(pool)
     for template in sorted(pool.filter_subvols(**kwargs)):
         click.echo("%s%s" % (pool, template))
+        
+        
+class Filter(object):
+    def __init__(self, pattern="@template:*.*:*:*"):
+        self.category, name, self.architecture, self.version = pattern.split(":")
+        self.namespace, self.identifier = name.rsplit(".", 1)
+
+    def match(self, subvol):
+        try:
+            category, name, architecture, version = subvol.split(":")
+        except ValueError:
+            return False
+            
+        namespace, identifier = name.rsplit(".", 1)
+
+        if self.category != "*" and self.category != category:
+            return False
+        if self.namespace != "*" and self.namespace != namespace:
+            return False
+        if self.identifier != "*" and self.identifier != identifier: # TODO: specify ,
+            return False
+        if self.architecture != "*" and self.architecture != architecture: # TODO: specify ,
+            return False
+        if self.version != "*" and self.version != version: # TODO: specify , and  -
+            return False
+        return True
+
+    def apply(self, iterable):
+        for i in iterable:
+            if self.match(i):
+                yield i
+                
+    def subset(self, namespace="*", identifier="*", architecture="*", version="*"):
+        return Filter(
+            "%s:%s.%s:%s:%s" % (
+                self.category,
+                self.namespace if namespace == "*" else namespace,
+                self.identifier if identifier == "*" else identifier,
+                self.architecture if architecture == "*" else architecture,
+                self.version if version == "*" else version))
 
 @click.command("serve", help="Run built-in HTTP API server")
-@click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
-@click.option("-n", "--namespace", default="*", help="Template namespace")
-@click.option("-i", "--identifier", default="*", help="Template identifier")
-@click.option("-a", "--architecture", default="*", help="Architecture")
-@click.option("-v", "--version", default="*", help="Version")
+@click.argument("subvol", default="@template:*.*:*:*")
 @click.option("-u", "--user", default="root", help="Run as user")
 @click.option("-p", "--port", default=80, help="Listen port")
 @click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
-def http_serve(pool, namespace, identifier, architecture, version, user, port, listen):
-    click.echo("Serving @template:%s.%s:%s:%s from %s at %s:%d" % (namespace,
-        identifier, architecture, version, pool, listen, port))
+def http_serve(match, user, port, listen):
+    subvol_filter = Filter(subvol)
+ 
+    pool = LocalPool()
 
-    pool = Pool(pool)
-    
+    click.echo("Serving %s from %s at %s:%d" % (subvol, pool, listen, port))
+  
     import falcon
     import unicodedata
     import json
     import pwd
     from datetime import date, datetime
 
-    _, _, uid, gid, gecos, root, shell = pwd.getpwnam(user)
-    sudoer = os.path.join("/etc/sudoers.d", user)
 
     class MyEncoder(json.JSONEncoder):
         def default(self, obj):
@@ -280,14 +384,10 @@ def http_serve(pool, namespace, identifier, architecture, version, user, port, l
         """
         def wrapped(instance, req, resp, **kwargs):
             assert not req.get_param("unicode") or req.get_param("unicode") == u"✓", "Unicode sanity check failed"
-
-            # Default to no caching of API calls
             resp.set_header("Cache-Control", "no-cache, no-store, must-revalidate");
             resp.set_header("Pragma", "no-cache");
             resp.set_header("Expires", "0");
-
             r = func(instance, req, resp, **kwargs)
-
             if not resp.body:
                 if not req.client_accepts_json:
                     raise falcon.HTTPUnsupportedMediaType(
@@ -296,18 +396,14 @@ def http_serve(pool, namespace, identifier, architecture, version, user, port, l
                 resp.set_header('Content-Type', 'application/json')
                 resp.body = json.dumps(r, cls=MyEncoder)
             return r
-
-        # Pipe API docs
-        wrapped._apidoc = getattr(func, "_apidoc", {})
-        wrapped.__doc__ = func.__doc__
         return wrapped
 
     class TemplateResource(object):
         @serialize
         def on_get(self, req, resp):
             return {"templates": map(
-                lambda ab:{"namespace": ab[0], "identifier":ab[1]},
-                set(pool.filter_names(namespace=namespace, identifier=identifier)))}
+                lambda j:{"namespace": j[0], "identifier":j[1], "architectures":j[2]},
+                pool.template_list(subvol_filter))}
 
     class VersionResource(object):
         @serialize
@@ -315,7 +411,7 @@ def http_serve(pool, namespace, identifier, architecture, version, user, port, l
             namespace, identifier = name.rsplit(".", 1)
             return { "versions": map(
                 lambda v:{"identifier":v},
-                sorted(pool.filter_subvols(namespace=namespace, identifier=identifier, architecture=arch), reverse=True, key=lambda j:j.numeric_version)) }
+                sorted(subvol_filter.apply(pool.subvol_list()), reverse=True, key=lambda j:j.numeric_version)) }
 
     class StreamingResource(object):
         def on_get(self, req, resp, name, arch, version):
@@ -323,10 +419,12 @@ def http_serve(pool, namespace, identifier, architecture, version, user, port, l
             parent_version = req.get_param("parent")
             
             subvol = "@template:%(name)s:%(arch)s:%(version)s" % locals()
+            if subvol_filter.match(subvol): raise
             
             suggested_filename = "%(name)s:%(arch)s:%(version)s" % locals()
             if parent_version:
                 parent_subvol = "@template:%(name)s:%(arch)s:%(parent_version)s" % locals()
+                if subvol_filter.match(parent_subvol): raise
                 suggested_filename += ":" + parent_version
             else:
                 parent_subvol = None
@@ -334,9 +432,6 @@ def http_serve(pool, namespace, identifier, architecture, version, user, port, l
 
             resp.set_header("Content-Disposition", "attachment; filename=\"%s\"" % suggested_filename)
             resp.set_header('Content-Type', 'application/btrfs-stream')
-
-#            if uid:
-#                cmd = ("sudo",) + cmd
 
             streamer = subprocess.Popen(pool.command_send(subvol, parent_subvol), stdout=subprocess.PIPE)
             resp.stream = streamer.stdout
@@ -368,6 +463,9 @@ def http_serve(pool, namespace, identifier, architecture, version, user, port, l
     class ThreadingWSGIServer(ThreadingMixIn, WSGIServer): 
         pass
 
+    _, _, uid, gid, gecos, root, shell = pwd.getpwnam(user)
+    sudoer = os.path.join("/etc/sudoers.d", user)
+
     if uid == 0:
         print("Warning: running as root, this is not reccommended")
     elif not os.path.exists(sudoer):
@@ -392,40 +490,127 @@ def multicast_receive(pool):
     udpcast.wait()
 
 @click.command("send", help="Send subvolume over multicast")
+@click.argument("subvol")
 @click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
-@click.option("-c", "--category", default="@template", help="Subvolume type")
-@click.option("-n", "--namespace", required=True, help="Namespace")
-@click.option("-i", "--identifier", required=True, help="Identifier")
-@click.option("-a", "--architecture", required=True, help="Architecture")
-@click.option("-v", "--version", required=True, help="Version")
 @click.option("-m", "--min-wait", default=5, help="Wait until t seconds since first receiver connection has passed")
-def multicast_send(pool, category, namespace, identifier, architecture, version):
+def multicast_send(subvol, pool, min_wait):
     pool = Pool(pool)
-    btrfs = subprocess.Popen(pool.command_send("%s:%s.%s:%s:%s" % (category, namespace, identifier, architecture, version)), stdout=subprocess.PIPE)
-    cmd = "udp-sender", "--nokbd", "--no-progress", "--min-receivers", "1", "--min-wait", "5"
+    btrfs = subprocess.Popen(pool.command_send(subvol), stdout=subprocess.PIPE)
+    cmd = "udp-sender", "--nokbd", "--no-progress", "--min-receivers", "1", "--min-wait", str(min_wait)
     udpcast = subprocess.Popen(cmd, stdin=btrfs.stdout)
     btrfs.wait()
+    
+@click.command("release", help="Snapshot a LXC container and release as Butterknife template")
+@click.argument("name")
+def lxc_release(name):
+
+    config = configparser.ConfigParser()
+    config.read('/etc/butterknife/butterknife.conf')
+   
+
+    import lxc
+    container=lxc.Container(name)
+    if container.running:
+        print("Stopping container")
+        container.stop()
+
+    ROOTFS = container.get_config_item("lxc.rootfs")
+    assert os.path.isdir(ROOTFS), "No directory at %s" % ROOTFS
+
+    POSTDEPLOY_SCRIPTS = os.path.join(ROOTFS, "etc", "butterknife", "postdeploy.d")
+    assert os.path.isdir(POSTDEPLOY_SCRIPTS), "Postinstall scripts directory %s missing!" % POSTDEPLOY_SCRIPTS
+
+    config.read(os.path.join(ROOTFS, "etc/butterknife/butterknife.conf"))
+    if "template" not in config.sections():
+        config.add_section("template")
+    if "name" not in config["template"]:
+        config.set("template", name)
+    config.set("template", "endpoint", config.get("global", "endpoint"))
+    config.set("template", "namespace", config.get("global", "namespace"))
+    
+    architecture = container.get_config_item("lxc.arch")
+    config.set("template", "architecture", architecture)
+
+    snapshot = container.snapshot()
+
+    config.set("template", "version", snapshot)
+
+    print("Created snapshot:", snapshot)
+
+    snapdir = os.path.join("/var/lib/lxcsnaps", name, snapshot)
+
+    with open(os.path.join(snapdir, "rootfs/etc/butterknife/butterknife.conf"), "w") as fh:
+        config.write(fh)
+
+    cmd = "btrfs", "subvolume", "snapshot", "-r", os.path.join(snapdir, "rootfs"), \
+        "/var/butterknife/pool/@template:%(namespace)s.%(name)s:%(architecture)s:%(version)s" % config["template"]
+
+    print("Executing:", " ".join(cmd))
+
+    import subprocess
+    subprocess.call(cmd)
+    
+@click.command("list", help="Linux Containers that have been prepared for Butterknife")
+def lxc_list():
+    import lxc
+    for name in lxc.list_containers():
+        container=lxc.Container(name)
+        rootfs = container.get_config_item("lxc.rootfs")
+        
+        template_config = os.path.join(rootfs, "etc/butterknife/butterknife.conf")
+        if not os.path.exists(template_config):
+            continue
+
+        config = configparser.ConfigParser()
+        config.read('/etc/butterknife/butterknife.conf')
+        config.read(template_config)
+        if "template" not in config.sections():
+            config.add_section("template")
+        if "name" not in config["template"]:
+            config.set("template", "name", "?")
+        click.echo("%s --> @template:%s:%s:%s" % (name.ljust(40), config.get("global", "namespace"), config.get("template", "name"), container.get_config_item("lxc.arch")))
+
+@click.command("release", help="Release systemd namespace as Butterknife template")
+def nspawn_release():
+    raise NotImplementedError()
+        
+@click.command("list", help="systemd namespaces that have been prepared for Butterknife")
+def nspawn_list():
+    raise NotImplementedError()
+    
+@click.command(help="Instantiate template (DANGEROUS!)")
+def deploy():
+    pass
+    
+@click.group(help="Linux Containers interface")
+def lxc(): pass
+
+@click.group(help="systemd-nspawn interface")
+def nspawn(): pass
 
 @click.group(help="Receive or serve over multicast")
-def multicast():
-    pass
+def multicast(): pass
 
 @click.group(help="Serve HTTP API")
-def http():
-    pass
+def http(): pass
 
 @click.group()
-def cli():
-    pass
+def cli(): pass
 
 multicast.add_command(multicast_receive)
 multicast.add_command(multicast_send)
 http.add_command(http_serve)
+lxc.add_command(lxc_release)
+lxc.add_command(lxc_list)
+nspawn.add_command(nspawn_release)
+nspawn.add_command(nspawn_list)
 cli.add_command(pull)
 cli.add_command(push)
 cli.add_command(list)
 cli.add_command(multicast)
 cli.add_command(http)
-
+cli.add_command(lxc)
+cli.add_command(nspawn)
+cli.add_command(deploy)
 if __name__ == "__main__":
     cli()

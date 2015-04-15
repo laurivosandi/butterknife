@@ -60,3 +60,9 @@ Receiving to local pool at /var/butterknife/pool:
 .. code:: bash
 
     butterknife multicast receive
+    
+You can even multicast a remote subvolume:
+
+.. code:: bash
+
+    butterknife multicast send @template\:com.koodur.butterknife.Ubuntu\:x86_64\:snap7 --pool ssh://hostname
