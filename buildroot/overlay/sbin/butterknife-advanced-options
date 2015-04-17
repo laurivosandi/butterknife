@@ -76,7 +76,7 @@ do
             selected_subvol=$(dialog --menu "Select subvolume to delete on $BUTTERKNIFE_PARTITION" 0 0 0 \
                 --file $subvols 2>&1 >$(tty))
             rm -f $subvols
-            btrfs subvol delete $mountpoint/$selected_subvol
+            btrfs subvol delete -c $mountpoint/$selected_subvol
             umount $mountpoint
             rmdir $mountpoint
         ;;

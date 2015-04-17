@@ -428,6 +428,13 @@ def lxc_release(name):
 
     snapdir = os.path.join("/var/lib/lxcsnaps", name, snapshot)
 
+    cmd = "chroot", os.path.join(snapdir, "rootfs"), "/usr/local/bin/butterknife-prerelease"
+
+    print("Executing:", " ".join(cmd))
+
+    import subprocess
+    subprocess.call(cmd)
+
     with open(os.path.join(snapdir, "rootfs/etc/butterknife/butterknife.conf"), "w") as fh:
         config.write(fh)
 
@@ -435,8 +442,6 @@ def lxc_release(name):
         "/var/butterknife/pool/@template:%(namespace)s.%(name)s:%(architecture)s:%(version)s" % config["template"]
 
     print("Executing:", " ".join(cmd))
-
-    import subprocess
     subprocess.call(cmd)
     
 @click.command("list", help="Linux Containers that have been prepared for Butterknife")
