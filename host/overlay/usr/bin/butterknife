@@ -7,8 +7,13 @@ import urllib.request
 import configparser
 import subprocess
 
+class SubvolNotFound(Exception):
+    pass
+
 class Subvol(object):
     def __init__(self, subvol):
+        if "/" in subvol:
+            raise Exception("Invalid subvolume base name, contains /")
         self.category, fqn, self.architecture, self.version = subvol.split(":")
         self.namespace, self.identifier = fqn.rsplit(".", 1)
         assert self.version.startswith("snap")
@@ -24,10 +29,11 @@ class Subvol(object):
         return repr(self) == repr(other)
 
     def __gt__(self, other):
-        return self.numeric_version > other.numeric_version
+        return (self.namespace, self.identifier, self.architecture, self.numeric_version) > \
+            (other.namespace, other.identifier, other.architecture, other.numeric_version)
 
-    def __gt__(self, other):
-        return self.numeric_version > other.numeric_version
+    def __lt__(self, other):
+        return other > self
 
     def __hash__(self):
         return hash(repr(self))
@@ -54,29 +60,65 @@ class LocalPool(object):
         return [Subvol(j) for j in os.listdir(self.path) if j.startswith("@template:")]
         
     def receive(self, fh, subvol, parent_subvol=None):
-        cmd = "btrfs", "receive", os.path.join(self.path)
+        cmd = "btrfs", "receive", os.path.join(self.path), "-C"
         if parent_subvol:
-            cmd += "-p", os.path.join(self.path, str(parent_subvol))
+            cmd += "-p", "/" + str(parent_subvol)
         click.echo("Executing: %s" % " ".join(cmd))
         return subprocess.Popen(cmd, stdin=fh, close_fds=True)
 
     def send(self, subvol, parent_subvol=None):
-        cmd = "btrfs", "send", os.path.join(self.path, str(subvol))
+        subvol_path = os.path.join(self.path, str(subvol))
+        if not os.path.exists(subvol_path):
+           raise SubvolNotFound(str(subvol))
+        cmd = "btrfs", "send", subvol_path
         if parent_subvol:
-            cmd += "-p", os.path.join(self.path, str(parent_subvol))
+            parent_subvol_path = os.path.join(self.path, str(parent_subvol))
+            if not os.path.exists(parent_subvol_path):
+                raise SubvolNotFound(str(parent_subvol))
+            cmd += "-p", parent_subvol_path
         if os.getuid() > 0:
             cmd = ("sudo",) + cmd
+        click.echo("Executing: %s" % " ".join(cmd))
         return subprocess.Popen(cmd, stdout=subprocess.PIPE, close_fds=True)
 
 class WebPool(LocalPool):
-#            fh = urllib.request.urlopen("%s://%s/api/template/" % (self.scheme, self.hostname))
-#            for entry in json.loads(fh.read().decode("ascii"))["templates"]:
-#                yield "%(namespace)s.%(identifier)s" % entry
+
+    def __init__(self, hostname, port=None, path=None, user=None, secure=False):
+        self.secure = secure
+        self.hostname = hostname
+        self.port = port
+        self.user = user
+        self.path = path or "/"
+
+    def subvol_list(self):
+        fh = urllib.request.urlopen(str(self))
+        for entry in json.loads(fh.read().decode("ascii"))["subvolumes"]:
+            yield Subvol(entry["path"])
+
+    def __str__(self):
+        url = "https" if self.secure else "http"
+        url += "://"
+        if self.user:
+            url += "%s@" % self.user
+        url += self.hostname
+        if self.port:
+            url += ":%d" % self.port
+        url += self.path
+        return url
+
     def receive(self, fh, subvol, parent_subvol=None):
         raise NotImplementedError("Unable to push via HTTP/HTTPS")
 
+    def send(self, fh, subvol, parent_subvol=None):
+        cmd = "curl",
+        cmd += "-A", "Butterknife-Util/0.1"
+        if self.secure:
+            cmd += "--compressed",
+        cmd += str(self),
+        return subprocess.Popen(cmd, stdout=subprocess.PIPE, close_fds=True)
+
 class SecureShellPool(LocalPool):
-    def __init__(self, hostname, port=None, user=None, path=None):
+    def __init__(self, hostname, port=None, path=None, user=None):
         self.hostname = hostname
         self.port = port 
         self.user = user
@@ -105,9 +147,9 @@ class SecureShellPool(LocalPool):
         return cmd + (self.hostname,)
 
     def receive(self, fh, subvol, parent_subvol=None):
-        cmd = self.prefix() + "btrfs", "receive", os.path.join(self.path)
+        cmd = self.prefix() + "btrfs", "receive", os.path.join(self.path), "-C"
         if parent_subvol:
-            cmd += "-p", os.path.join(self.path, str(parent_subvol))
+            cmd += "-p", "/" + str(parent_subvol)
         return subprocess.Popen(cmd, stdin=fh, close_fds=True)
 
     def send(self, subvol, parent_subvol=None):
@@ -125,8 +167,10 @@ def pool_factory(url):
         assert not o.fragment
         assert not o.query
         return LocalPool(o.path)
+    if o.scheme in ("http", "https"):
+        return WebPool(o.hostname, o.port, o.path, secure=o.scheme=="https")
     if o.scheme == "ssh":
-        return SecureShellPool(o.hostname, o.port, o.username, o.path)
+        return SecureShellPool(o.hostname, o.port, o.path, o.username)
 
 def push_pull(source, destination, subvol):
     subvol_filter = Filter(subvol)
@@ -160,8 +204,6 @@ def push_pull(source, destination, subvol):
                 continue
 
             for subvol in following_subvols:
-                
-            
                 if parent_subvol:
                     click.echo("Fetching incremental snapshot %s relative to %s" % (subvol.version, parent_subvol.version))
                 else:
@@ -236,12 +278,12 @@ class Filter(object):
                 self.architecture if architecture == "*" else architecture,
                 self.version if version == "*" else version))
 
-@click.command("serve", help="Run built-in HTTP API server")
+@click.command("http", help="Run built-in HTTP server")
 @click.argument("subvol", default="@template:*.*:*:*")
-@click.option("-u", "--user", default="root", help="Run as user")
+@click.option("-u", "--user", default=None, help="Run as user")
 @click.option("-p", "--port", default=80, help="Listen port")
 @click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
-def http_serve(subvol, user, port, listen):
+def serve_http(subvol, user, port, listen):
     subvol_filter = Filter(subvol)
     pool = LocalPool()
     click.echo("Serving %s from %s at %s:%d" % (subvol, pool, listen, port))
@@ -284,6 +326,23 @@ def http_serve(subvol, user, port, listen):
             return r
         return wrapped
 
+    class SubvolResource(object):
+        @serialize
+        def on_get(self, req, resp):
+            def subvol_generator():
+                for j in sorted(pool.subvol_list()):
+                    if req.get_param("architecture"):
+                        if req.get_param("architecture") != j.architecture:
+                            continue
+                    yield {
+                        "path": str(j),
+                        "namespace": j.namespace,
+                        "identifier": j.identifier,
+                        "architecture": j.architecture,
+                        "version": j.version }
+
+            return { "subvolumes": tuple(subvol_generator()) }
+
     class TemplateResource(object):
         @serialize
         def on_get(self, req, resp):
@@ -301,7 +360,7 @@ def http_serve(subvol, user, port, listen):
                 lambda v:{"identifier":v},
                 sorted(subset_filter.apply(pool.subvol_list()), reverse=True, key=lambda j:j.numeric_version)) }
 
-    class StreamingResource(object):
+    class LegacyStreamingResource(object):
         def on_get(self, req, resp, name, arch, version):
 
             parent_version = req.get_param("parent")
@@ -341,10 +400,62 @@ def http_serve(subvol, user, port, listen):
             else:
                 print("Client did not ask for compression")
 
+    class StreamResource(object):
+        def on_get(self, req, resp, subvol):
+            subvol = Subvol(subvol)
+            if not subvol_filter.match(subvol):
+                resp.body = "Subvolume does not match filter"
+                resp.status = falcon.HTTP_403
+                return
+
+            parent_slug = req.get_param("parent")
+            suggested_filename = "%s.%s-%s-%s" % (subvol.namespace, subvol.identifier, subvol.architecture, subvol.version)
+
+            if parent_slug:
+                parent_subvol = Subvol(parent_slug) if parent_slug else None
+                if not subvol_filter.match(parent_subvol):
+                    resp.body = "Subvolume does not match filter"
+                    resp.status = falcon.HTTP_403
+                    return
+                suggested_filename += "-" + parent_subvol.version
+            else:
+                parent_subvol = None
+
+            suggested_filename += ".far"
+
+            resp.set_header("Content-Disposition", "attachment; filename=\"%s\"" % suggested_filename)
+            resp.set_header('Content-Type', 'application/btrfs-stream')
+
+            try:
+                streamer = pool.send(subvol, parent_subvol)
+            except SubvolNotFound as e:
+                resp.body = "Could not find subvolume %s\n" % str(e)
+                resp.status = falcon.HTTP_403
+                return
+            resp.stream = streamer.stdout
+
+            accepted_encodings = req.get_header("Accept-Encoding") or ""
+            accepted_encodings = [j.strip() for j in accepted_encodings.lower().split(",")]
+
+            if "gzip" in accepted_encodings:
+                for cmd in "/usr/bin/pigz", "/bin/gzip":
+                    if os.path.exists(cmd):
+                        resp.set_header('Content-Encoding', 'gzip')
+                        print("Compressing with %s" % cmd)
+                        compressor = subprocess.Popen((cmd,), stdin=streamer.stdout, stdout=subprocess.PIPE)
+                        resp.stream = compressor.stdout
+                        break
+                else:
+                    print("No gzip compressors found, falling back to no compression")
+            else:
+                print("Client did not ask for compression")
+
     app = falcon.API()
     app.add_route("/api/template/", TemplateResource())
     app.add_route("/api/template/{name}/arch/{arch}/version/", VersionResource())
-    app.add_route("/api/template/{name}/arch/{arch}/version/{version}/stream/", StreamingResource())
+    app.add_route("/api/template/{name}/arch/{arch}/version/{version}/stream/", LegacyStreamingResource())
+    app.add_route("/", SubvolResource())
+    app.add_route("/{subvol}/", StreamResource())
 
     from wsgiref.simple_server import make_server, WSGIServer
     from socketserver import ThreadingMixIn
@@ -352,20 +463,28 @@ def http_serve(subvol, user, port, listen):
     class ThreadingWSGIServer(ThreadingMixIn, WSGIServer): 
         pass
 
-    _, _, uid, gid, gecos, root, shell = pwd.getpwnam(user)
-    sudoer = os.path.join("/etc/sudoers.d", user)
-
-    if uid == 0:
-        print("Warning: running as root, this is not reccommended")
-    elif not os.path.exists(sudoer):
-        print("Please create %s with following content: %s ALL=(ALL) NOPASSWD: /sbin/btrfs send /var/butterknife/pool/@template:*" % (sudoer, user))
 
     print("Listening on %s:%d" % (listen, port))
     httpd = make_server(listen, port, app, ThreadingWSGIServer)
-    if uid:
+
+
+    if user:
+        _, _, uid, gid, gecos, root, shell = pwd.getpwnam(user)
+        sudoer = os.path.join("/etc/sudoers.d", user)
+
+        if uid == 0:
+            print("Please specify unprivileged user, eg 'butterknife'")
+            exit(254)
+        elif not os.path.exists(sudoer):
+            print("Please create %s with following content: %s ALL=(ALL) NOPASSWD: /sbin/btrfs send /var/butterknife/pool/@template:*" % (sudoer, user))
+            exit(253)
+
         print("Switching to user %s (uid=%d, gid=%d)" % (user, uid, gid))
         os.setgid(gid)
         os.setuid(uid)
+    elif os.getuid() == 0:
+        click.echo("Warning: running as root, this is not reccommended!")
+
     httpd.serve_forever()
 
 
@@ -378,11 +497,11 @@ def multicast_receive(pool):
     btrfs = subprocess.Popen(pool.command_receive(), stdin=udpcast.stdout)
     udpcast.wait()
 
-@click.command("send", help="Send subvolume over multicast")
+@click.command("multicast", help="Serve subvolume over multicast")
 @click.argument("subvol")
 @click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
 @click.option("-m", "--min-wait", default=5, help="Wait until t seconds since first receiver connection has passed")
-def multicast_send(subvol, pool, min_wait):
+def serve_multicast(subvol, pool, min_wait):
     pool = pool_factory(pool)
     btrfs = subprocess.Popen(pool.command_send(subvol), stdout=subprocess.PIPE)
     cmd = "udp-sender", "--nokbd", "--no-progress", "--min-receivers", "1", "--min-wait", str(min_wait)
@@ -485,15 +604,15 @@ def nspawn(): pass
 @click.group(help="Receive or serve over multicast")
 def multicast(): pass
 
-@click.group(help="Serve HTTP API")
-def http(): pass
+@click.group(help="Servers")
+def serve(): pass
 
 @click.group()
 def cli(): pass
 
 multicast.add_command(multicast_receive)
-multicast.add_command(multicast_send)
-http.add_command(http_serve)
+serve.add_command(serve_multicast)
+serve.add_command(serve_http)
 lxc.add_command(lxc_release)
 lxc.add_command(lxc_list)
 nspawn.add_command(nspawn_release)
@@ -502,7 +621,7 @@ cli.add_command(pull)
 cli.add_command(push)
 cli.add_command(list)
 cli.add_command(multicast)
-cli.add_command(http)
+cli.add_command(serve)
 cli.add_command(lxc)
 cli.add_command(nspawn)
 cli.add_command(deploy)
