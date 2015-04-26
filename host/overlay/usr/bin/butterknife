@@ -88,9 +88,10 @@ class WebPool(LocalPool):
         self.hostname = hostname
         self.port = port
         self.user = user
-        self.path = path or "/"
+        self.path = path or "/api/subvol/"
 
     def subvol_list(self):
+        click.echo("Fetching %s" % self)
         fh = urllib.request.urlopen(str(self))
         for entry in json.loads(fh.read().decode("ascii"))["subvolumes"]:
             yield Subvol(entry["path"])
@@ -454,6 +455,8 @@ def serve_http(subvol, user, port, listen):
     app.add_route("/api/template/", TemplateResource())
     app.add_route("/api/template/{name}/arch/{arch}/version/", VersionResource())
     app.add_route("/api/template/{name}/arch/{arch}/version/{version}/stream/", LegacyStreamingResource())
+    app.add_route("/api/subvol/", SubvolResource())
+    app.add_route("/api/subvol/{subvol}/", StreamResource())
     app.add_route("/", SubvolResource())
     app.add_route("/{subvol}/", StreamResource())
 
@@ -476,7 +479,7 @@ def serve_http(subvol, user, port, listen):
             print("Please specify unprivileged user, eg 'butterknife'")
             exit(254)
         elif not os.path.exists(sudoer):
-            print("Please create %s with following content: %s ALL=(ALL) NOPASSWD: /sbin/btrfs send /var/butterknife/pool/@template:*" % (sudoer, user))
+            print("Please create %s with following content: %s ALL=(ALL) NOPASSWD: /sbin/btrfs send /var/butterknife/pool/@template\\:*" % (sudoer, user))
             exit(253)
 
         print("Switching to user %s (uid=%d, gid=%d)" % (user, uid, gid))
