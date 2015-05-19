@@ -145,7 +145,7 @@ Finally fire up the HTTP API:
 
 .. code:: bash
 
-    butterknife http serve
+    butterknife serve http
 
 
 Serving provisioning image over PXE
