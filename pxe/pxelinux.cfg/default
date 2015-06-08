@@ -1,0 +1,22 @@
+default menu.c32
+prompt 0
+timeout 600
+menu title Butterknife provisioning tool
+
+label mbr
+    menu label Boot from local harddisk
+    localboot 0
+
+label butterknife
+    menu label Butterknife (amd64)
+    kernel butterknife-amd64
+    append quiet
+
+label butterknife
+    menu label Butterknife (i386)
+    kernel butterknife-i386
+    append quiet
+
+label memtest
+    menu label Memtest86+
+    linux memtest86+.bin
