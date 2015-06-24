@@ -4,7 +4,8 @@ Butterknife provisioning suite
 Butterknife makes bare-metal Linux deployment dead-simple using the Btrfs
 filesystem and containers.
 
-.. image:: doc/img/butterknife-usecase-tee.png
+.. figure:: doc/img/butterknife-usecase-tee.png
+    :align: center
 
 Detailed background of the work is described in
 Master Thesis
