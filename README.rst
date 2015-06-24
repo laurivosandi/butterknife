@@ -5,13 +5,16 @@ Butterknife makes bare-metal Linux deployment dead-simple using the Btrfs
 filesystem and containers.
 
 .. figure:: doc/img/butterknife-usecase-tee.png
-    :align: center
+
+    Butterknife with off-site server and multicast
 
 Detailed background of the work is described in
 Master Thesis
 `Efficient and Reliable Filesystem Snapshot Distribution
 <https://owncloud.koodur.com/index.php/s/5KOgVze9X2cOUkD>`_.
-    
+You can check out production instance of Butterknife serve at
+`butterknife.koodur.com <https://butterknife.koodur.com/`_.
+ 
 General workflow
 ----------------
 
