@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link href="//fonts.googleapis.com/css?family=Lobster+Two:400,700italic" rel="stylesheet" type="text/css">
+    <link href="//fonts.googleapis.com/css?family=PT+Sans+Narrow" rel="stylesheet" type="text/css">
+    <meta charset="utf-8"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <title>Butterknife server</title>
+    <style type="text/css">
+        img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+        
+        footer {
+            display: block;
+            color: #fff;
+            text-align: center;
+        }
+        
+        a {
+            text-decoration: none;
+            color: #44c;
+        }
+        
+        footer a {
+            color: #aaf;
+        }
+        
+        html,body {
+            margin: 0;
+            padding: 0 0 1em 0;
+        }
+        
+        body {
+            background: #222;
+            background-image: url('http://fc00.deviantart.net/fs71/i/2013/078/9/6/free_hexa_pattern_cc0_by_black_light_studio-d4ig12f.png');
+            background-position: center; 
+        }
+        
+        .comment {
+            color: #aaf;
+        }
+        
+        table th, table td {
+            border: 1px solid #ccc;
+            padding: 2px;
+        }
+        
+        h1, h2, th {
+            font-family: 'Lobster Two';
+        }
+        
+        h1 {
+            text-align: center;
+            font-size: 22pt;
+        }
+
+        h2 {
+            font-size: 18pt;
+        }
+        
+        h2 svg {
+            position: relative;
+            top: 16px;
+        }
+        
+        p, td, footer {
+            font-family: 'PT Sans Narrow';
+            font-size: 14pt;
+        }
+        
+        pre {
+            overflow: auto;
+            border: 1px solid #000;
+            background: #444;
+            color: #fff;
+            font-size: 12pt;
+            padding: 4px;
+            border-radius: 6px;
+            margin: 0 0;
+        }
+        
+        #container {
+            width: 720px;
+            margin: 1em auto;
+            background: #fff;
+            padding: 1em;
+            border-style: solid;
+            border-width: 2px;
+            border-color: #aaa;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+<div id="container">
+    <h1>Butterknife server at {{ request.host }}</h1>
+    
+    
+    
+    <img style="float:right; max-width: 50%; max-height: 50%; margin-left: 1em;" src="http://www.thestar.com/content/dam/thestar/news/world/2011/12/14/norway_runs_out_of_butter/butter.jpeg"/>
+    
+    <h2>What is this?</h2>
+    <p>You've stumbled upon Butterknife server instance,
+    some cool people are hosting Linux-based operating system
+    templates here as Btrfs snapshots and you can deploy those
+    templates on your hardware.</p>
+    
+    <h2>
+
+    How to use it?</h2>
+    
+    <p>
+    You are reccommended to boot Butterknife provisioning image either
+    from PXE or from memory stick.
+    Additionally we've included a code snippet below which can be used
+    to bootstrap machine using LiveCD or even from working system.
+    </p>
+
+    
+
+    <h2>
+    <svg height="48" width="48">
+        <circle fill="none" stroke-width="3" stroke="black" r="20" cy="24" cx="24"></circle>
+        <text dominant-baseline="middle" text-anchor="middle" y="24" x="24">1a</text>
+    </svg>
+    Butterknife provisioning from memory stick</h2>
+    
+    <p>Download ISO file and write it on a memory stick
+    
+    <pre>wget -c https://github.com/laurivosandi/butterknife/raw/master/butterknife-i386.iso
+sudo dd if=butterknife-i386.iso of=/dev/sdx <span class="comment"># Where sdx corresponds to your USB key</span></pre>
+
+    <p>In case you wish to deploy 64-bit templates or running on 64-bit capable hardware use following image instead:</p>
+    
+    <pre>wget -c https://github.com/laurivosandi/butterknife/raw/master/butterknife-amd64.iso
+sudo dd if=butterknife-amd64.iso of=/dev/sdx</pre>
+
+    <p>Windows users may want to give <a href="https://rufus.akeo.ie/">Rufus</a> a try.</p>
+    
+    <h2>
+    <svg height="48" width="48">
+        <circle fill="none" stroke-width="3" stroke="black" r="20" cy="24" cx="24"></circle>
+        <text dominant-baseline="middle" text-anchor="middle" y="24" x="24">1b</text>
+    </svg>
+    Butterknife provisioning from PXE</h2>
+    
+    <p>Set up TFTP server to serve Butterknife provisioning image on your LAN segment,
+replicate the directory structure from <a href="https://github.com/laurivosandi/butterknife/tree/master/pxe">GitHub repository</a> to TFTP server root and adjust <i>pxelinux.cfg/default</i>.</p>
+
+    <h2>
+    <svg height="48" width="48">
+        <circle fill="none" stroke-width="3" stroke="black" r="20" cy="24" cx="24"></circle>
+        <text dominant-baseline="middle" text-anchor="middle" y="24" x="24">2</text>
+    </svg>
+    Boot the machine</h2>
+    
+    <p>Boot the machine either from PXE, memory stick or CD.
+    Refer to your motherboard manual for temporary boot device.
+    Note that currently Butterknife supports legacy boot methods only,
+    hence make sure you have turned (U)EFI and secure boot off.
+
+
+
+
+    <h2>
+    <svg height="48" width="48">
+        <circle fill="none" stroke-width="3" stroke="black" r="20" cy="24" cx="24"></circle>
+        <text dominant-baseline="middle" text-anchor="middle" y="24" x="24">3</text>
+    </svg>
+    Follow instructions on the screen
+    </h2>
+    
+    <p>
+    Make sure you're connected to a DHCP-enabled router via ethernet cable and wait
+    for Butterknife provisioning image to boot up.
+    Once you've landed at following screen, you're almost done, just
+    <a href="https://github.com/laurivosandi/butterknife#deployment-workflow">follow instructions of the screen</a>:</p>
+    
+    <img src="https://github.com/laurivosandi/butterknife/raw/master/img/butterknife-main-screen.png"/>
+    
+    <p>Butterknife wipes the harddisk, creates a Btrfs filesystem and downloads the
+    snapshot to newly created filesystem by default.
+    There are options to use unpartitioned disk space, reformat a partition,
+    resize NTFS filesystem and even receive into existing Btrfs filesystem.
+    Once the snapshot is downloaded you can join the machine to an
+    Active Directory compatible domain or create a local user account.
+    Finally post installation scripts reconfigure bootloader
+    and if you're lucky enough you're greeted with a shiny Linux OS deployment.</p>
+
+
+
+    <h2>
+    Deploying from generic LiveCD or memory stick</h2>
+    
+    <p>
+    As an alternative or for experimentation you may use following commands on your machine
+    to download a snapshot and set up the bootloader.
+    This assumes you're running the target machine off eg Ubuntu LiveCD or you want to convert your current workstation:</p>
+
+    <pre><span class="comment"># Determine first Btrfs filesystem</span>
+UUID=$(blkid -s UUID -l -t TYPE=btrfs -o value)
+
+<span class="comment"># Create directories</span>
+mkdir -p /mnt/target/ /var/butterknife/pool/
+
+<span class="comment"># Mount subvolumes</span>
+mount UUID=$UUID -o subvol=/ /var/butterknife/pool
+mount UUID=$UUID -o subvol=$SUBVOLUME /mnt/target
+
+<span class="comment"># Download and apply snapshot</span>
+curl <span class="url" style="color:red;">{{ request.uri }}SELECT-SNAPSHOT-BELOW</span> \
+ | btrfs receive /var/butterknife/pool
+
+<span class="comment"># Mountpoints for chroot</span>
+mount --bind /sys /mnt/target/sys/
+mount --bind /proc /mnt/target/proc/
+mount --bind /dev /mnt/target/dev/
+mount --bind /dev /mnt/target/dev/pts/
+
+<span class="comment"># Run post-deploy scripts</span>
+chroot /mnt/target/ /usr/bin/butterknife-postdeploy
+
+<span class="comment"># Unmount filesystems</span>
+umount /mnt/target/dev/pts/
+umount /mnt/target/dev/
+umount /mnt/target/proc/
+umount /mnt/target/sys/
+umount /mnt/target/
+umount /var/butterknife/pool/
+
+<span class="comment"># Reboot machine</span>
+reboot</pre>
+
+    <h2>Run downstream server</h2>
+
+    <p>In case you want to run downstream Butterknife server with
+    snapshots on this machine you can use <i>butterknife pull</i> feature,
+    but first install Butterknife:</p>
+    
+    <pre>pip3 install butterknife</pre>
+    
+    <p>Pull the snapshots from this server:</p>
+    
+    <pre>butterknife pull {{request.uri}}</pre>
+    
+    <p>Run downstream server:</pre>
+    
+    <pre>butterknife serve</pre>
+    
+    <p>This of course assumes you're running on top of Btrfs filesystem and
+    your Btrfs utilities are up-to-date.</p>
+    
+    <h2>Available snapshots</h2>
+    
+    <p>Following snapshots are available on this server, use
+    <i>butterknife pull</i> to download the snapshots to your local server
+    as described above or use Butterknife provisioning image to deploy the templates.</p>
+    
+    <table style="border-collapse:collapse; width:100%;">
+        <tr>
+            <th>Namespace</th>
+            <th>Identifier</th>
+            <th>Architecture</th>
+            <th>Version</th>
+        </tr>
+        {% for subvolume in subvolumes %}
+            <tr>
+                <td>{{subvolume.namespace}}</td>
+                <td>{{subvolume.identifier}}</td>
+                <td>{{subvolume.architecture}}</td>
+                <td><a href="/{{subvolume.path}}">{{subvolume.version}}</a></td>
+            </tr>
+        {% endfor %}
+    </table>
+</div>
+
+</body>
+<footer><a href="http://github.com/laurivosandi/butterknife">Butterknife</a> by Lauri Võsandi</footer>
+
+</html>

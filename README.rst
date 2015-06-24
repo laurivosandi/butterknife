@@ -4,7 +4,12 @@ Butterknife provisioning suite
 Butterknife makes bare-metal Linux deployment dead-simple using the Btrfs
 filesystem and containers.
 
-.. figure:: img/butterknife-usecase-multicast.png
+.. figure:: img/butterknife-usecase-tee.png
+
+Detailed background of the work is described in
+Master Thesis
+`Efficient and Reliable Filesystem Snapshot Distribution
+<https://owncloud.koodur.com/index.php/s/5KOgVze9X2cOUkD>`_.
     
 General workflow
 ----------------
@@ -12,6 +17,7 @@ General workflow
 1. Prepare template of your customized OS in a LXC container
 2. Boot provisioning image and deploy the template on bare metal
 3. Enjoy using your favourite Linux-based OS :)
+
 
 Features
 --------
@@ -25,6 +31,8 @@ Features
 Installation
 ------------
 
+Current instructions are based on Ubuntu 14.04, but any modern Linux-based
+OS should suffice.
 First set up machine with Ubuntu 14.04 LTS on top of Btrfs filesystem to
 be used as snapshot server.
 
@@ -34,14 +42,6 @@ You can install Ubuntu 14.10 kernel on 14.04 simply by doing following:
 .. code:: bash
 
     apt-get install linux-image-generic-lts-utopic
-
-Also install the latest version of btrfs-tools, versions 3.12 and 3.16
-in Ubuntu repositories are known to be unusable:
-
-.. code:: bash
-
-    wget -c https://launchpadlibrarian.net/190998686/btrfs-tools_3.17-1.1_amd64.deb
-    sudo dpkg -i btrfs-tools_3.17-1.1_amd64.deb
     
 Make sure the root subvolume stays mounted at /var/butterknife/pool,
 with a corresponding entry in /etc/fstab:
@@ -58,6 +58,28 @@ updates as well causing excessive traffic.
 Make sure the LXC container and snapshot directories
 reside in the same Btrfs filesystem as 
 /var/butterknife/pool.
+
+Finally install the Butterknife command-line utility
+as described `here <host/>`_.
+
+
+Getting up to date btrfs-progs
+------------------------------
+
+We are using some esoteric functions (-p and -C for btrfs receive) which are not available in
+older btrfs-progs versions:
+
+.. code:: bash
+
+    sudo apt-get build-dep btrfs-progs
+    wget https://github.com/v6sa/btrfs-progs/archive/v3.19.x.zip
+    unzip v3.19.x.zip
+    sudo apt-get build-dep btrfs-progs
+    ./autogen.sh
+    ./configure
+    make
+    sudo make install
+
 
 Publishing workflow
 -------------------
@@ -91,15 +113,7 @@ eg for Puppet users:
     puppet apply /etc/puppet/manifests/site.pp
 
 Or just install and tweak whatever you need manually.
-To get a working Ubuntu 14.04 desktop install the corresponding metapackage,
-this of course contains a lot of useless stuff if you're planning to manage the
-image by yourself eg apport, update-notifier etc.
-
-.. code:: bash
-
-    lxc-attach -n your-template
-    apt-get update
-    apt-get install ubuntu-desktop
+Futher instructions for customizing the template can be found `here <template/>`_.
 
 Copy post-deploy, pre-release scripts and other helpers:
 
@@ -159,9 +173,9 @@ In this case Ubuntu/Debian is used to host the provisioning images.
     sudo apt-get install pxelinux
     cp /usr/lib/PXELINUX/pxelinux.0 /srv/tftp/
     cp /usr/lib/syslinux/modules/bios/*.c32 /srv/tftp/
-    wget https://butterknife.koodur.com/api/provision/butterknife-i386 \
+    wget https://github.com/laurivosandi/butterknife/raw/master/pxe/butterknife-i386 \
         -O /srv/tftp/butterknife-i386
-    wget https://butterknife.koodur.com/api/provision/butterknife-amd64 \
+    wget https://github.com/laurivosandi/butterknife/raw/master/pxe/butterknife-amd64 \
         -O /srv/tftp/butterknife-amd64
 
 Set up following in /srv/tftp/pxelinux.cfg/default:

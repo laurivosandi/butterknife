@@ -16,6 +16,23 @@ new snapshot while the machine is up, running and
 in use.
 
 
+What operating systems are supported
+------------------------------------
+
+Current LXC based template preparation supports
+major distributions such as Ubuntu, Debian, Fedora, CentOS, Gentoo, OpenSUSE,
+Arch.
+List of distributions which have prepared root filesystem tarballs available
+can be found on `Linux containers server <http://images.linuxcontainers.org/images/>`_.
+
+My Ubuntu 15.04 container doesn't start up!
+-------------------------------------------
+
+There are currently issues with *systemd* based containers.
+In order to prepare Debian 8 *jessie*, Ubuntu 15.04 or
+anything that requires *systemd* please use host that already is running
+*systemd*.
+
 Why not Puppet, Salt, Chef, Ansible?
 ------------------------------------
 
@@ -72,7 +89,8 @@ video hardware from within the containers.
 Butterknife attempts to provide atomic updates
 for workstations and at the same time remain compatible
 with already existing operating systems such as Ubuntu,
-Fedora, Red Hat etc.
+Fedora, Red Hat etc and configuration management systems such as Puppet,
+Salt, etc.
 
 
 

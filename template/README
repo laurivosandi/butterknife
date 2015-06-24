@@ -27,7 +27,6 @@ Other nice things:
 * Include `NetworkManager configuration <http://lauri.vosandi.com/cfgmgmt/network-manager-system-connections.html>`_ in template
 * Use Dconf to customize defaults and lock down attributes of MATE, XFCE, GNOME, etc desktops
 * Reduce amount of available locales
-* Generate fontconfig cache before template release
 * Instead of /etc/skel use /etc/dconf/db/blah.d/, /etc/firefox, /etc/thunderbird
 * Most importantly de-duplicate work!
 
@@ -42,6 +41,9 @@ one of the following:
     sudo apt-get install xubuntu-desktop       # XFCE
     sudo apt-get install ubuntu-mate-desktop   # MATE
 
+This of course contains a lot of useless stuff if you're planning to manage the
+image by yourself eg apport, update-notifier etc.
+
 Make sure you have btrfs-tools:
 
 .. code:: bash
@@ -54,7 +56,20 @@ Make sure you have installed legacy GRUB:
 
     apt-get install grub-pc
 
-Make sure you also have up to date kernel installed, in case of Ubuntu 14.04:
+Make sure you also have up to date kernel installed, in case of 64-bit Ubuntu 14.04 or
+Debian 8 *jessie*:
 
-    apt-get install linux-image-generic-lts-utopic
+.. code:: bash
 
+    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.14-vivid/linux-headers-3.18.14-031814-generic_3.18.14-031814.201505210236_amd64.deb
+    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.14-vivid/linux-headers-3.18.14-031814_3.18.14-031814.201505210236_all.deb
+    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.14-vivid/linux-image-3.18.14-031814-generic_3.18.14-031814.201505210236_amd64.deb
+    sudo dpkg -i \
+        linux-headers-3.18.14-031814-generic_3.18.14-031814.201505210236_amd64.deb \
+        linux-headers-3.18.14-031814_3.18.14-031814.201505210236_all.deb \
+        linux-image-3.18.14-031814-generic_3.18.14-031814.201505210236_amd64.deb
+
+
+Default language can be set via /etc/default/locale.
+There are countless aspects when it comes to system customization
+which are out of the scope of Butterknife.
