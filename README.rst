@@ -4,7 +4,7 @@ Butterknife provisioning suite
 Butterknife makes bare-metal Linux deployment dead-simple using the Btrfs
 filesystem and containers.
 
-.. figure:: img/butterknife-usecase-tee.png
+.. figure:: doc/img/butterknife-usecase-tee.png
 
 Detailed background of the work is described in
 Master Thesis
@@ -241,7 +241,7 @@ If you're using MikroTik's WinBox open up your DHCP network configuration and
 set **Next Server** option to 213.168.13.40 and **Boot file name** option to 
 pxelinux.0:
 
-.. figure:: img/mikrotik-pxe-boot.png
+.. figure:: doc/img/mikrotik-pxe-boot.png
 
 If you've set up your own TFTP server as described in the previous
 section substitute 213.168.13.40 with your TFTP server's IP address.
@@ -252,15 +252,15 @@ Deployment workflow
 Butterknife provisioning image provides menu-driven user-interface
 with simple Enter-Enter-Enter usage:
 
-.. figure:: img/butterknife-main-screen.png
+.. figure:: doc/img/butterknife-main-screen.png
     
 We currently support HTTP, multicast and various combinations of both:
     
-.. figure:: img/butterknife-transfer-method.png
+.. figure:: doc/img/butterknife-transfer-method.png
 
 Partitioning choices feature also NTFS resize and incremental upgrades:
 
-.. figure:: img/butterknife-partitioning-method.png
+.. figure:: doc/img/butterknife-partitioning-method.png
     
 Target disk selection:
 
@@ -272,7 +272,7 @@ Partition selection:
     
 Template versions are actually snapshots:
     
-.. figure:: img/butterknife-select-version.png
+.. figure:: doc/img/butterknife-select-version.png
 
 These steps should be enough to deploy a Linux-based OS in no time.
 
@@ -282,10 +282,10 @@ Recovery console
 In case you need to recover already deployed instance or delete old
 templates pick Advanced Options from main menu which brings up following:
 
-.. figure:: img/butterknife-advanced-options.png
+.. figure:: doc/img/butterknife-advanced-options.png
 
 All instances can be easily entered via instance maintenance entry:
 
-.. figure:: img/butterknife-instance-list.png
+.. figure:: doc/img/butterknife-instance-list.png
 
     
