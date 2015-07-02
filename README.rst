@@ -12,8 +12,8 @@ Detailed background of the work is described in
 Master Thesis
 `Efficient and Reliable Filesystem Snapshot Distribution
 <https://owncloud.koodur.com/index.php/s/5KOgVze9X2cOUkD>`_.
-You can check out production instance of Butterknife serve at
-`butterknife.koodur.com <https://butterknife.koodur.com/`_.
+You can check out production instance of Butterknife server at
+`butterknife.koodur.com <https://butterknife.koodur.com/>`_.
  
 General workflow
 ----------------
