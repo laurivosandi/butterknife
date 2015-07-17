@@ -295,4 +295,4 @@ Contact
 
 Feel free to join the `#butterknife channel at Freenode IRC
 <https://webchat.freenode.net/?channels=butterknife&nick=butterknife-user>`_ or
-to open issue `here at GitHub <issues/>`_.
+to open issue `here at GitHub <http://github.com/laurivosandi/butterknife/issues/>`_.
