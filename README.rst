@@ -289,4 +289,10 @@ All instances can be easily entered via instance maintenance entry:
 
 .. figure:: doc/img/butterknife-instance-list.png
 
-    
+
+Contact
+-------
+
+Feel free to join the `#butterknife channel at Freenode IRC
+<https://webchat.freenode.net/?channels=butterknife&nick=butterknife-user>`_ or
+to open issue `here at GitHub <issues/>`_.
