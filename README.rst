@@ -41,11 +41,24 @@ First set up machine with Ubuntu 14.04 LTS on top of Btrfs filesystem to
 be used as snapshot server.
 
 Before doing any filesystem magic ensure that you're running 3.16+ kernel.
-You can install Ubuntu 14.10 kernel on 14.04 simply by doing following:
+You can install up to date kernel on 14.04 simply by doing following:
 
 .. code:: bash
 
-    apt-get install linux-image-generic-lts-utopic
+    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.14-vivid/linux-headers-3.18.14-031814-generic_3.18.14-031814.201505210236_amd64.deb
+    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.14-vivid/linux-headers-3.18.14-031814_3.18.14-031814.201505210236_all.deb
+    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.14-vivid/linux-image-3.18.14-031814-generic_3.18.14-031814.201505210236_amd64.deb
+    sudo dpkg -i \
+        linux-headers-3.18.14-031814-generic_3.18.14-031814.201505210236_amd64.deb \
+        linux-headers-3.18.14-031814_3.18.14-031814.201505210236_all.deb \
+        linux-image-3.18.14-031814-generic_3.18.14-031814.201505210236_amd64.deb
+
+You also need updated btrfs-tools:
+
+.. code:: bash
+
+    wget -c http://launchpadlibrarian.net/190998686/btrfs-tools_3.17-1.1_amd64.deb
+    dpkg -i btrfs-tools_3.17-1.1_amd64.deb
     
 Make sure the root subvolume stays mounted at /var/butterknife/pool,
 with a corresponding entry in /etc/fstab:
@@ -65,24 +78,6 @@ reside in the same Btrfs filesystem as
 
 Finally install the Butterknife command-line utility
 as described `here <host/>`_.
-
-
-Getting up to date btrfs-progs
-------------------------------
-
-We are using some esoteric functions (-p and -C for btrfs receive) which are not available in
-older btrfs-progs versions:
-
-.. code:: bash
-
-    sudo apt-get build-dep btrfs-progs
-    wget https://github.com/v6sa/btrfs-progs/archive/v3.19.x.zip
-    unzip v3.19.x.zip
-    sudo apt-get build-dep btrfs-progs
-    ./autogen.sh
-    ./configure
-    make
-    sudo make install
 
 
 Publishing workflow
@@ -163,7 +158,7 @@ Finally fire up the HTTP API:
 
 .. code:: bash
 
-    butterknife serve http
+    butterknife serve
 
 
 Serving provisioning image over PXE
@@ -174,7 +169,7 @@ In this case Ubuntu/Debian is used to host the provisioning images.
 
 .. code:: bash
 
-    sudo apt-get install pxelinux
+    sudo apt-get install pxelinux atftpd
     cp /usr/lib/PXELINUX/pxelinux.0 /srv/tftp/
     cp /usr/lib/syslinux/modules/bios/*.c32 /srv/tftp/
     wget https://github.com/laurivosandi/butterknife/raw/master/pxe/butterknife-i386 \
@@ -223,7 +218,7 @@ in /etc/dhcp/dhcpd.conf and restart the service:
 
 .. code::
 
-    next-server 213.168.13.40;
+    next-server 192.168.x.x;
     filename "pxelinux.0";
 
 If you have OpenWrt based router simply add following to 
@@ -232,23 +227,23 @@ the service:
 
 .. code::
 
-    option dhcp_boot 'pxelinux.0,,213.168.13.40'
+    option dhcp_boot 'pxelinux.0,,192.168.x.x'
 
 If running vanilla *dnsmasq*, then simply add following to /etc/dnsmasq.conf
 and restart the service:
 
 .. code::
 
-    dhcp-boot=pxelinux.0,,213.168.13.40
+    dhcp-boot=pxelinux.0,,192.168.x.x
  
 If you're using MikroTik's WinBox open up your DHCP network configuration and
-set **Next Server** option to 213.168.13.40 and **Boot file name** option to 
+set **Next Server** option to 192.168.x.x and **Boot file name** option to 
 pxelinux.0:
 
 .. figure:: doc/img/mikrotik-pxe-boot.png
 
-If you've set up your own TFTP server as described in the previous
-section substitute 213.168.13.40 with your TFTP server's IP address.
+Remember to replace 192.168.x.x with the actual IP address of your TFTP server.
+
  
 Deployment workflow
 -------------------
@@ -279,6 +274,8 @@ Template versions are actually snapshots:
 .. figure:: doc/img/butterknife-select-version.png
 
 These steps should be enough to deploy a Linux-based OS in no time.
+You can follow instructions `here <provision/>`_ to assemble the
+provisioning image from scratch.
 
 Recovery console
 ----------------

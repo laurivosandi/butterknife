@@ -4,7 +4,7 @@ import click
 import subprocess
 from butterknife.subvol import Subvol
 
-BTRFS = "/usr/bin/btrfs"
+BTRFS = "/sbin/btrfs"
 
 class LocalPool(object):
     DEFAULT_PATH = "/var/butterknife/pool"

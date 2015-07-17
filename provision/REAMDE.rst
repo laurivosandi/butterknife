@@ -6,21 +6,27 @@ which can be either booted via PXE or from a USB memory stick.
 
 Steps to reproduce the image:
 
+.. code:: bash
+
     wget -c http://buildroot.uclibc.org/downloads/buildroot-2015.02.tar.bz2
     tar xvjf buildroot-2015.02.tar.bz2
     cd buildroot-2015.02
     patch -p1 < path/to/butterknife/buildroot/patches/ms-sys.diff
     patch -p1 < path/to/butterknife/buildroot/patches/isohybrid.diff
 
-Bump syslinux version to 6.03 and remove the patch
+Bump syslinux version to 6.03 and remove the patch.
 
 To tweak the build:
+
+.. code:: bash
 
     make menuconfig
     make linux-menuconfig
     make busybox-menuconfig
 
 Enable:
+
+.. code::
 
     Toolchain -> Enable WCHAR support
     Toolchain -> Enable large file (files > 2 GB) support
@@ -71,6 +77,8 @@ Make sure you:
 * enable support for necessary ethernet cards, USB and SATA controllers
 
 To compile the image run:
+
+.. code:: bash
 
   make
 

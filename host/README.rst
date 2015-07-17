@@ -49,6 +49,8 @@ List templates at /var/butterknife/pool on a remote machine via SSH:
     
 List templates at remote machine via HTTP:
 
+.. code:: bash
+
     butterknife list http[s]://hostname[:port]
 
 
