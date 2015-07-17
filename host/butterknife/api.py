@@ -19,9 +19,9 @@ class MyEncoder(json.JSONEncoder):
             return obj.version
         return json.JSONEncoder.default(self, obj)
 
-def parse_subvol(func)
+def parse_subvol(func):
     def wrapped(instance, req, resp, subvol, *args, **kwargs):
-        return func(instance, req, resp, Subvol("@" + subvol), *args, **kwargs
+        return func(instance, req, resp, Subvol("@" + subvol), *args, **kwargs)
     return wrapped
 
 def serialize(func):
