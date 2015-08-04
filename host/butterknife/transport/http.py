@@ -44,7 +44,7 @@ class WebPool(LocalPool):
         cmd += "-A", "Butterknife-Util/0.1"
         if self.secure:
             cmd += "--compressed",
-        url = "%s%s" % (self, subvol)
+        url = "%s/subvol/%s" % (self, subvol)
         if parent_subvol:
             url += "?parent=%s" % parent_subvol
         cmd += url,
