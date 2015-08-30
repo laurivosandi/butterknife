@@ -121,7 +121,7 @@ Nspawn into it and customize your container
 You will also need some scripts that will be ran on snapshot creation and when
 doing deployments with provision image.
 
-look into the `puppet-butterknife <https://github.com/laurivosandi/puppet-butterknife>` repository for scripts and files you should add
+look into the `puppet-butterknife <https://github.com/laurivosandi/puppet-butterknife>`_ repository for scripts and files you should add
 
 
 Create butterknife config file in
