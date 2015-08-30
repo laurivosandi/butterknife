@@ -1,3 +1,0 @@
-#!/bin/bash
-echo "Resetting /etc/network/interfaces, assuming that NetworkManager is installed"
-echo -en "auto lo\niface lo inet loopback\n" > /etc/network/interfaces

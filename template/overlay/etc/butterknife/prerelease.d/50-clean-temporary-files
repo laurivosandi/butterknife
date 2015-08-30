@@ -1,4 +1,0 @@
-#!/bin/bash
-
-find /etc -name "*.save" -delete
-find /etc -name "*.dpkg-dist" -delete

@@ -1,6 +1,0 @@
-#!/bin/bash
-
-echo "Enabling persistent APT package cache in /var/butterknife/persistent/apt-archives"
-mkdir -p /var/butterknife/persistent/apt-archives/partial
-echo "Dir::Cache::archives /var/butterknife/persistent/apt-archives/;" > /etc/apt/apt.conf.d/95persistent-cache 
-

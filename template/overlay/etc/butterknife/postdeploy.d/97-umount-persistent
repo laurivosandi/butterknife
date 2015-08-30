@@ -1,5 +1,0 @@
-#!/bin/bash
-
-# Unmount persistent directory
-umount /var/butterknife/persistent
-
