@@ -95,3 +95,56 @@ Receiving to local pool at /var/butterknife/pool:
 
     butterknife multicast receive
 
+systemd-nspawn workflow
+-----------------------
+
+Create a btrfs subvolume for your butterknife image under /var/lib/machines. 
+Replace ArchLinux with your image name you want to use.
+
+.. code:: bash
+
+    sudo btrfs subvolume create /var/lib/machines/ArchLinux
+
+Install base system in there
+
+.. code:: bash
+
+    sudo pacstrap -i -c -d /var/lib/machines/ArchLinux base
+
+Nspawn into it and customize your container
+
+.. code:: bash
+
+    sudo systemd-nspawn -M ArchLinux
+    # do your thing
+
+You will also need some scripts that will be ran on snapshot creation and when
+doing deployments with provision image.
+
+look into the `puppet-butterknife <https://github.com/laurivosandi/puppet-butterknife>` repository for scripts and files you should add
+
+
+Create butterknife config file in
+/var/lib/machines/ArchLinux/etc/butterknife/butterknife.conf
+
+.. code:: ini
+
+    [template]
+    name=ArchLinux
+    
+Also make sure that you have something like this on your host 
+etc/butterknife/butterknife.conf config file
+
+.. code:: ini
+
+    [global]
+    namespace=org.example.butterknife
+    endpoint=https://butterknife.example.org
+
+Take a snapshot of your image
+
+.. code:: bash
+
+    butterknife nspawn release ArchLinux
+
+And now you should be ready to serve that image to your clients
