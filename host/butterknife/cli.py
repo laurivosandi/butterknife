@@ -287,12 +287,86 @@ def pool_clean():
         subprocess.check_output(cmd)
 
 @click.command("release", help="Release systemd namespace as Butterknife template")
-def nspawn_release():
-    raise NotImplementedError()
+@click.argument("name")
+def nspawn_release(name):
+    config = configparser.ConfigParser()
+    config.read('/etc/butterknife/butterknife.conf')
+    
+    click.echo("Make sure that your nspawn container isn't running!")
+
+    ROOTFS = os.path.join("/var/lib/machines", name)
+    assert os.path.isdir(ROOTFS), "No directory at %s" % ROOTFS
+
+    POSTDEPLOY_SCRIPTS = os.path.join(ROOTFS, "etc", "butterknife", "postdeploy.d")
+    assert os.path.isdir(POSTDEPLOY_SCRIPTS), "Postinstall scripts directory %s missing!" % POSTDEPLOY_SCRIPTS
+
+    config.read(os.path.join(ROOTFS, "etc/butterknife/butterknife.conf"))
+    if "template" not in config.sections():
+        config.add_section("template")
+    if "name" not in config["template"]:
+        config.set("template", name)
+    config.set("template", "endpoint", config.get("global", "endpoint"))
+    config.set("template", "namespace", config.get("global", "namespace"))
+    
+    import subprocess
+    architecture = subprocess.check_output(("file", os.path.join(ROOTFS, 'bin/bash'))).decode()
+    if "32-bit" in architecture:
+        architecture = "x86"
+    else:
+        architecture = "x86_64"
+    config.set("template", "architecture", architecture)
+
+    
+    pool = pool_factory("file://")
+    snapshot = sorted(Filter("@template:%(namespace)s.%(name)s:%(architecture)s:*" % config["template"]).apply(pool.subvol_list()))[-1].numeric_version
+    snapshot = "snap"+str(snapshot+1)
+
+    config.set("template", "version", snapshot)
+
+    cmd = "chroot", ROOTFS, "/usr/local/bin/butterknife-prerelease"
+
+    print("Executing:", " ".join(cmd))
+
+    subprocess.call(cmd)
+
+    with open(os.path.join(ROOTFS, "etc/butterknife/butterknife.conf"), "w") as fh:
+        config.write(fh)
+
+    cmd = "btrfs", "subvolume", "snapshot", "-r", ROOTFS, \
+        "/var/butterknife/pool/@template:%(namespace)s.%(name)s:%(architecture)s:%(version)s" % config["template"]
+
+    print("Executing:", " ".join(cmd))
+    subprocess.call(cmd)
         
 @click.command("list", help="systemd namespaces that have been prepared for Butterknife")
 def nspawn_list():
-    raise NotImplementedError()
+    for name in os.listdir("/var/lib/machines"):
+        rootfs = os.path.join("/var/lib/machines", name)
+        
+        template_config = os.path.join(rootfs, "etc/butterknife/butterknife.conf")
+        if not os.path.exists(template_config):
+            print("no config file", template_config)
+            continue
+        
+        config = configparser.ConfigParser()
+        config.read('/etc/butterknife/butterknife.conf')
+        config.read(template_config)
+        if "template" not in config.sections():
+            config.add_section("template")
+        if "name" not in config["template"]:
+            config.set("template", "name", "?")
+        
+        arch = subprocess.check_output(("file", os.path.join(rootfs, 'bin/bash'))).decode()
+        if "32-bit" in arch:
+            arch = "x86"
+        else:
+            arch = "x86_64"
+            
+        click.echo("%s --> @template:%s:%s:%s" % (name.ljust(20), 
+                                                config.get("global", "namespace"),
+                                                config.get("template", "name"),
+                                                arch))
+        
     
 @click.command(help="Instantiate template (DANGEROUS!)")
 def deploy():
