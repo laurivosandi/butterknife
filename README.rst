@@ -169,15 +169,17 @@ In this case Ubuntu/Debian is used to host the provisioning images.
 
 .. code:: bash
 
-    sudo apt-get install pxelinux atftpd
-    cp /usr/lib/PXELINUX/pxelinux.0 /srv/tftp/
-    cp /usr/lib/syslinux/modules/bios/*.c32 /srv/tftp/
+    sudo apt-get install pxelinux tftpd-hpa memtest86+
+    mkdir -p /var/lib/tftpboot/butterknife/
+    cp /boot/memtest86+.bin /var/lib/tftpboot/butterknife/
+    cp /usr/lib/syslinux/pxelinux.0 /var/lib/tftpboot/butterknife/
+    cp /usr/lib/syslinux/*.c32 /var/lib/tftpboot/butterknife/
     wget https://github.com/laurivosandi/butterknife/raw/master/pxe/butterknife-i386 \
-        -O /srv/tftp/butterknife-i386
+        -O /var/lib/tftpboot/butterknife/butterknife-i386
     wget https://github.com/laurivosandi/butterknife/raw/master/pxe/butterknife-amd64 \
-        -O /srv/tftp/butterknife-amd64
+        -O /var/lib/tftpboot/butterknife/butterknife-amd64
 
-Set up following in /srv/tftp/pxelinux.cfg/default:
+Set up following in /var/lib/tftpboot/butterknife/pxelinux.cfg/default:
 
 .. code::
 
@@ -190,25 +192,23 @@ Set up following in /srv/tftp/pxelinux.cfg/default:
         menu label Boot from local harddisk
         localboot 0
 
-    label butterknife
+    label butterknife-amd64
+        menu label Butterknife (amd64)
+        kernel butterknife-amd64
+
+    label butterknife-i386
+        menu label Butterknife (i386)
+        kernel butterknife-i386
+
+    label deploy-edu-workstation
         menu label Deploy edu workstation (i386)
         kernel butterknife-i386
         append bk_url=https://butterknife.koodur.com/api/ bk_template=com.koodur.butterknife.EduWorkstation quiet
 
-    label butterknife
-        menu label Butterknife (amd64)
-        kernel butterknife-amd64
-        append bk_url=https://butterknife.koodur.com/api/ quiet
-
-    label butterknife
-        menu label Butterknife (i386, debug)
-        kernel butterknife-i386
-        append bk_url=https://butterknife.koodur.com/api/
-
     label memtest
         menu label Memtest86+
         linux memtest86+.bin
-        
+
 
 Setting up PXE boot
 -------------------
