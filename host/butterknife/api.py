@@ -43,7 +43,7 @@ def serialize(func):
             resp.body = json.dumps(r, cls=MyEncoder)
         return r
     return wrapped
-    
+
 
 from jinja2 import Environment, PackageLoader, FileSystemLoader
 env = Environment(loader=PackageLoader('butterknife', 'templates'))
@@ -70,7 +70,7 @@ def templatize(path):
                     return r
         return wrapped
     return wrapper
-    
+
 class PoolResource(object):
     def __init__(self, pool, subvol_filter):
         self.pool = pool
@@ -114,11 +114,11 @@ class LegacyStreamingResource(PoolResource):
     def on_get(self, req, resp, name, arch, version):
 
         parent_version = req.get_param("parent")
-        
+
         subvol = "@template:%(name)s:%(arch)s:%(version)s" % locals()
         if not self.subvol_filter.match(Subvol(subvol)):
             raise Exception("Not going to happen")
-        
+
         suggested_filename = "%(name)s:%(arch)s:%(version)s" % locals()
         if parent_version:
             parent_subvol = "@template:%(name)s:%(arch)s:%(parent_version)s" % locals()
@@ -158,31 +158,50 @@ class StreamResource(PoolResource):
             resp.status = falcon.HTTP_403
             return
 
-        parent_slug = req.get_param("parent")
-        suggested_filename = "%s.%s-%s-%s" % (subvol.namespace, subvol.identifier, subvol.architecture, subvol.version)
+        format = req.get_param("format") or "btrfs-stream"
 
-        if parent_slug:
-            parent_subvol = Subvol(parent_slug) if parent_slug else None
-            if not self.subvol_filter.match(parent_subvol):
-                resp.body = "Subvolume does not match filter"
+        if format == "btrfs-stream":
+            parent_slug = req.get_param("parent")
+            suggested_filename = "%s.%s-%s-%s" % (subvol.namespace, subvol.identifier, subvol.architecture, subvol.version)
+
+            if parent_slug:
+                parent_subvol = Subvol(parent_slug) if parent_slug else None
+                if not self.subvol_filter.match(parent_subvol):
+                    resp.body = "Subvolume does not match filter"
+                    resp.status = falcon.HTTP_403
+                    return
+                suggested_filename += "-" + parent_subvol.version
+            else:
+                parent_subvol = None
+
+            suggested_filename += ".far"
+
+
+            resp.set_header('Content-Type', 'application/btrfs-stream')
+
+            try:
+                streamer = self.pool.send(subvol, parent_subvol)
+            except SubvolNotFound as e:
+                resp.body = "Could not find subvolume %s\n" % str(e)
                 resp.status = falcon.HTTP_403
                 return
-            suggested_filename += "-" + parent_subvol.version
+        elif format == "tar":
+            suggested_filename = "%s.%s-%s-%s.tar" % (subvol.namespace, subvol.identifier, subvol.architecture, subvol.version)
+
+            try:
+                streamer = self.pool.tar(subvol)
+            except SubvolNotFound as e:
+                resp.body = "Could not find subvolume %s\n" % str(e)
+                resp.status = falcon.HTTP_403
+                return
         else:
-            parent_subvol = None
-
-        suggested_filename += ".far"
-
-        resp.set_header("Content-Disposition", "attachment; filename=\"%s\"" % suggested_filename)
-        resp.set_header('Content-Type', 'application/btrfs-stream')
-
-        try:
-            streamer = self.pool.send(subvol, parent_subvol)
-        except SubvolNotFound as e:
-            resp.body = "Could not find subvolume %s\n" % str(e)
+            resp.body = "Requested unknown format"
             resp.status = falcon.HTTP_403
             return
+
         resp.stream = streamer.stdout
+
+        resp.set_header("Content-Disposition", "attachment; filename=\"%s\"" % suggested_filename)
 
         accepted_encodings = req.get_header("Accept-Encoding") or ""
         accepted_encodings = [j.strip() for j in accepted_encodings.lower().split(",")]

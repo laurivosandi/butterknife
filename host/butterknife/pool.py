@@ -51,3 +51,11 @@ class LocalPool(object):
         click.echo("Executing: %s" % " ".join(cmd))
         return subprocess.Popen(cmd, stdout=subprocess.PIPE, close_fds=True)
 
+    def tar(self, subvol):
+        subvol_path = os.path.join(self.path, str(subvol))
+        cmd = "tar", "cvf", "-", "."
+        if os.getuid() > 0:
+            cmd = ("sudo", "-n") + cmd
+        click.echo("Executing: %s" % " ".join(cmd))
+        return subprocess.Popen(cmd, stdout=subprocess.PIPE, close_fds=True, cwd=subvol_path)
+
