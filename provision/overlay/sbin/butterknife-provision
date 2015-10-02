@@ -18,7 +18,7 @@ URL_LOCAL=http://butterknife/api
 #######################################
 ### Check for presence of utilities ###
 #######################################
-for util in btrfs jq fdisk find ntfsresize udp-sender udp-receiver ntpdate curl ms-sys mktemp test true sort uniq; do
+for util in btrfs jq fdisk find ntfsresize udp-sender udp-receiver ntpdate curl ms-sys mktemp test true sort uniq dig; do
     if [ -z "$(which $util)" ]; then
         dialog --msgbox "Butterknife was unable to locate $util,\
             are you sure the provisioning image was compiled properly?" 0 0
@@ -223,11 +223,16 @@ case $TRANSFER_METHOD in
         if [ -z $bk_url ]; then
 
             bk_url=$(dialog --menu "Select server" 0 0 0 \
-                $URL_LOCAL                       "Use local or manually enter" \
+                mdns:// "Autodiscover" \
+                $URL_LOCAL                       "Manually enter" \
                 https://butterknife.koodur.com/api/   "Koodur LLC" 2>&1 >$(tty))
 
-            if [ "$bk_url" == $URL_LOCAL ]; then
-                bk_url=$(dialog --inputbox "Use local instance or customize URL" \
+            if [ "$bk_url" == "mdns://" ]; then
+                butterknife-discover > /tmp/discovered_servers
+                bk_url=$(dialog --menu "Select one of discovered servers" \
+                    0 0 0 --file /tmp/discovered_servers 2>&1 >$(tty))
+            elif [ "$bk_url" == $URL_LOCAL ]; then
+                bk_url=$(dialog --inputbox "Manually enter the URL of Butterknife server" \
                     0 0 $URL_LOCAL 2>&1 >$(tty))
             fi
         fi

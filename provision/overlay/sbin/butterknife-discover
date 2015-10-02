@@ -1,0 +1,12 @@
+dig -t ANY @224.0.0.251 -p5353 +noall +answer _butterknife._tcp.local | grep "IN SRV" | while read line; do
+   hostname=$(echo $line | cut -d " " -f 8)
+   address=$(dig +short +noall +answer @224.0.0.251 -p5353 $hostname)
+   port=$(echo $line | cut -d " " -f 7)
+   title=$(echo $line | cut -d "." -f 1 | sed -e 's/\032/ /g')
+   if [ $port -eq 80 ]; then
+       echo "http://$address/api \"$title\""
+   else
+       echo "http://$address:$port/api \"$title\""
+   fi
+done
+

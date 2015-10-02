@@ -6,6 +6,7 @@ import json
 import urllib.request
 import configparser
 import subprocess
+import socket
 from butterknife.pool import LocalPool
 from butterknife.subvol import Subvol
 
@@ -175,7 +176,37 @@ def serve(subvol, user, port, listen):
         os.setuid(uid)
     elif os.getuid() == 0:
         click.echo("Warning: running as root, this is not reccommended!")
+
+    try:
+        import dbus
+    except ImportError:
+        print("Could not import dbus, gobject or avahi - Avahi advertisement of service disabled")
+        group = None
+    else:
+        service_name = "Butterknife server at " + socket.gethostname() + (" port %d" % port if port != 80 else "")
+        print("Advertising via Avahi:", service_name)
+        bus = dbus.SystemBus()
+        server = dbus.Interface(
+            bus.get_object("org.freedesktop.Avahi", "/"),
+            "org.freedesktop.Avahi.Server")
+        group = dbus.Interface(
+            bus.get_object('org.freedesktop.Avahi', server.EntryGroupNew()),
+            "org.freedesktop.Avahi.EntryGroup")
+        group.AddService(
+            -1,
+            -1,
+            dbus.UInt32(0),
+            service_name.encode("ascii"),
+            b"_butterknife._tcp",
+            b"local",
+            (socket.gethostname() + ".local").encode("ascii"),
+            dbus.UInt16(port), [b"path=/api/"])
+        group.Commit()
+
     httpd.serve_forever()
+
+    if not group is None:
+        group.Free()
 
 @click.command("receive", help="Receive subvolume over multicast")
 @click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
