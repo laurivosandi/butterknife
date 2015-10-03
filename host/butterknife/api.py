@@ -219,4 +219,19 @@ class StreamResource(PoolResource):
         else:
             print("Client did not ask for compression")
 
+class ManifestResource(PoolResource):
+    """
+    Generate manifest for a subvolume
+    """
 
+    @parse_subvol
+    def on_get(self, req, resp, subvol):
+        if not self.subvol_filter.match(subvol):
+            resp.body = "Subvolume does not match filter"
+            resp.status = falcon.HTTP_403
+            return
+        suggested_filename = "%s.%s-%s-%s.csv" % (subvol.namespace, subvol.identifier, subvol.architecture, subvol.version)
+        resp.set_header('Content-Type', 'text/plain')
+        resp.set_header("Content-Disposition", "attachment; filename=\"%s\"" % suggested_filename)
+
+        resp.stream = self.pool.manifest(subvol)

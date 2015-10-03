@@ -44,5 +44,6 @@ class SecureShellPool(LocalPool):
         if parent_subvol:
             cmd += "-p", os.path.join(self.path, str(parent_subvol))
         return subprocess.Popen(cmd, stdout=subprocess.PIPE, close_fds=True)
-        
 
+    def manifest(self, subvol):
+        raise NotImplementedError("Generating manifest for remote pool not implemented, yet!")

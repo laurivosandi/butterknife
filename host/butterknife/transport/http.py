@@ -51,3 +51,7 @@ class WebPool(LocalPool):
             
         click.echo("Executing: %s" % " ".join(cmd))
         return subprocess.Popen(cmd, stdout=subprocess.PIPE, close_fds=True)
+
+    def manifest(self, subvol):
+        # TODO: Download /@subvol/manifest/
+        raise NotImplementedError("Generating manifest for remote pool not implemented, yet!")
