@@ -37,13 +37,13 @@ class SecureShellPool(LocalPool):
         cmd = self.prefix() + "btrfs", "receive", os.path.join(self.path), "-C"
         if parent_subvol:
             cmd += "-p", "/" + str(parent_subvol)
-        return subprocess.Popen(cmd, stdin=fh, close_fds=True)
+        return subprocess.Popen(cmd, stdin=fh)
 
     def send(self, subvol, parent_subvol=None):
         cmd = self.prefix() + ("btrfs", "send", os.path.join(self.path, str(subvol)))
         if parent_subvol:
             cmd += "-p", os.path.join(self.path, str(parent_subvol))
-        return subprocess.Popen(cmd, stdout=subprocess.PIPE, close_fds=True)
+        return subprocess.Popen(cmd, stdout=subprocess.PIPE)
 
     def manifest(self, subvol):
         raise NotImplementedError("Generating manifest for remote pool not implemented, yet!")

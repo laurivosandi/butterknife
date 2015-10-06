@@ -5,8 +5,9 @@ from urllib.parse import urlparse
 import json
 import urllib.request
 import configparser
-import subprocess
+import signal
 import socket
+import subprocess
 from butterknife.pool import LocalPool
 from butterknife.subvol import Subvol
 
@@ -63,7 +64,7 @@ def push_pull(source, destination, subvol):
                 else:
                     click.echo("Fetching full snapshot %s" % subvol.version)
                 btrfs_send = source.send(subvol, parent_subvol)
-                pv = subprocess.Popen(("pv",), stdin=btrfs_send.stdout, stdout=subprocess.PIPE, close_fds=True)
+                pv = subprocess.Popen(("pv",), stdin=btrfs_send.stdout, stdout=subprocess.PIPE)
                 btrfs_receive = destination.receive(pv.stdout, subvol, parent_subvol)
                 btrfs_receive.communicate()
                 if btrfs_receive.returncode or btrfs_send.returncode or pv.returncode:
@@ -138,6 +139,8 @@ class Filter(object):
 @click.option("-p", "--port", default=80, help="Listen port")
 @click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
 def serve(subvol, user, port, listen):
+    signal.signal(signal.SIGCHLD, signal.SIG_IGN) # Prevent btrfs [defunct]
+
     subvol_filter = Filter(subvol)
     pool = LocalPool()
     click.echo("Serving %s from %s at %s:%d" % (subvol, pool, listen, port))

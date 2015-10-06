@@ -50,7 +50,7 @@ class WebPool(LocalPool):
         cmd += url,
             
         click.echo("Executing: %s" % " ".join(cmd))
-        return subprocess.Popen(cmd, stdout=subprocess.PIPE, close_fds=True)
+        return subprocess.Popen(cmd, stdout=subprocess.PIPE)
 
     def manifest(self, subvol):
         # TODO: Download /@subvol/manifest/
