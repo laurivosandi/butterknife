@@ -21,7 +21,7 @@ def symbolic_notation(path):
     m += "-r"[mode >> 2 & 1]
     m += "-w"[mode >> 1 & 1]
     m += "-xTt"[mode & 1 | mode >> 8 & 2]
-    return m, attribs.st_uid, attribs.st_gid, attribs.st_size, attribs.st_mtime
+    return m, attribs.st_uid, attribs.st_gid, attribs.st_size, int(attribs.st_mtime)
 
 def generate_manifest(target, relroot=""):
     # Generate manifest function recursively traverses target path and
