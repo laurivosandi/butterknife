@@ -2,7 +2,7 @@ import os
 
 def determine_rootfs_subvol():
     for row in open("/proc/%d/mountinfo" % os.getpid()):
-        mid, pid, devid, root, mpoint, mopts, opt, sep, fs, msource = row.strip().split(" ", 10)
+        mid, pid, devid, root, mpoint, mopts, opt, sep, fs, msource = row.strip().split(" ", 9)
         if mpoint == "/":
             if root.startswith("/@root:"):
                 return "@template:" + root[7:]
