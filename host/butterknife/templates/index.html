@@ -264,13 +264,25 @@ reboot</pre>
             <th>Identifier</th>
             <th>Architecture</th>
             <th>Version</th>
+            <th>Stream</th>
+
         </tr>
         {% for subvolume in subvolumes %}
             <tr>
                 <td>{{subvolume.namespace}}</td>
                 <td>{{subvolume.identifier}}</td>
                 <td>{{subvolume.architecture}}</td>
-                <td><a href="/{{subvolume.path}}">{{subvolume.version}}</a></td>
+                <td>{{subvolume.version}}</td>
+                <td>
+                    <a href="/{{subvolume.path}}" title="Download in .far format, suitable for piping to: btrfs receive">far</a> |
+                    <a href="/{{subvolume.path}}/?format=tar" title="Download in .tar format, suitable for piping to: tar xvf -">tar</a> |
+                    <a href="/{{subvolume.path}}/manifest/" title="Download manifest">manifest</a>
+                    {% if subvolume.signed %}
+                        | <a href="/{{subvolume.path}}/signature/" title="Download signature">signature</a>
+                    {% endif %}
+
+                </td>
+
             </tr>
         {% endfor %}
     </table>

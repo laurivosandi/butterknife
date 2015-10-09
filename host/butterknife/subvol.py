@@ -1,3 +1,13 @@
+import os
+
+def determine_rootfs_subvol():
+    for row in open("/proc/%d/mountinfo" % os.getpid()):
+        mid, pid, devid, root, mpoint, mopts, opt, sep, fs, msource = row.strip().split(" ", 10)
+        if mpoint == "/":
+            if root.startswith("/@root:"):
+                return "@template:" + root[7:]
+            break
+    return None
 
 class SubvolNotFound(Exception):
     pass

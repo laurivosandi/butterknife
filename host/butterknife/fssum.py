@@ -21,18 +21,21 @@ def symbolic_notation(path):
     m += "-r"[mode >> 2 & 1]
     m += "-w"[mode >> 1 & 1]
     m += "-xTt"[mode & 1 | mode >> 8 & 2]
-    return m, str(attribs.st_uid), str(attribs.st_gid)
+    return m, attribs.st_uid, attribs.st_gid, attribs.st_size, \
+        attribs.st_mtime if attribs.st_mtime > attribs.st_ctime else attribs.st_ctime
 
 def generate_manifest(target, relroot=""):
     # Generate manifest function recursively traverses target path and
     # yields tuples of:
     # 1. Symbolic notation, eg "drwxr-xr-x"
-    # 2. Owner ID, eg "0"
-    # 3. Group ID, eg "0"
-    # 4. Checksum algorithm, eg "sha256"
-    # 5. Checksum, eg "9b6287917439911fda0933c95e85d78a34b1068c5a58f1041b8ca3576f238dc6"
-    # 6. Filename, eg "/usr/bin/sudo"
-    # 7. Symlink target if any, eg "-"
+    # 2. File size, eg "123"
+    # 3. Modification/change timestamp whichever is later.
+    # 4. Owner ID, eg "0"
+    # 5. Group ID, eg "0"
+    # 6. Checksum algorithm, eg "sha256"
+    # 7. Checksum, eg "9b6287917439911fda0933c95e85d78a34b1068c5a58f1041b8ca3576f238dc6"
+    # 8. Filename, eg "/usr/bin/sudo"
+    # 9. Symlink target if any, eg "-"
 
     absroot = os.path.join(target, relroot)
     assert "\t" not in absroot
@@ -46,7 +49,7 @@ def generate_manifest(target, relroot=""):
         assert "\t" not in filename
         abspath = os.path.join(absroot, filename)
         relpath = os.path.join("/", relroot, filename)
-        bitmap, uid, gid = symbolic_notation(abspath)
+        bitmap, uid, gid, size, timestamp = symbolic_notation(abspath)
 
         if bitmap[0] == "-":
             buf = open(abspath, "rb").read()
@@ -54,16 +57,16 @@ def generate_manifest(target, relroot=""):
             m = hashlib.sha256()
             m.update(buf)
             m.hexdigest()
-            yield bitmap, uid, gid, "sha256", m.hexdigest(), relpath, None
+            yield bitmap, size, timestamp, uid, gid, "sha256", m.hexdigest(), relpath, None
         elif bitmap[0] == "l":
-            yield bitmap, uid, gid, None, None, relpath, os.readlink(abspath)
+            yield bitmap, 0, timestamp, uid, gid, None, None, relpath, os.readlink(abspath)
         elif bitmap[0] == "d":
-            dirs.append((filename, abspath, relpath, bitmap, uid, gid))
+            dirs.append((filename, abspath, relpath, bitmap, uid, gid, timestamp))
         else:
-            yield bitmap, uid, gid, None, None, relpath, None
+            yield bitmap, 0, timestamp, uid, gid, None, None, relpath, None
 
-    for dirname, abspath, relpath, bitmap, uid, gid in dirs:
-        yield bitmap, uid, gid, None, None, relpath, None
+    for dirname, abspath, relpath, bitmap, uid, gid, timestamp in dirs:
+        yield bitmap, 0, timestamp, uid, gid, None, None, relpath, None
         for entry in generate_manifest(target, os.path.join(relroot, dirname)):
             yield entry
 

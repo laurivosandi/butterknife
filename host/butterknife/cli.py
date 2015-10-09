@@ -1,15 +1,27 @@
 
-import os
 import click
-from urllib.parse import urlparse
-import json
-import urllib.request
 import configparser
+import json
+import os
 import signal
 import socket
 import subprocess
+import http.client
+import urllib.request
 from butterknife.pool import LocalPool
-from butterknife.subvol import Subvol
+from butterknife.update import butterknife_update
+from butterknife.subvol import Subvol, determine_rootfs_subvol
+from butterknife.verify import verify_manifest
+from urllib.parse import urlparse
+
+FQDN = socket.getaddrinfo(socket.gethostname(), 0, flags=socket.AI_CANONNAME)[0][3]
+BUTTERKNIFE_NAMESPACE = ".".join(reversed(FQDN.split(".")))
+BUTTERKNIFE_CONF = "/etc/butterknife/butterknife.conf"
+BUTTERKNIFE_CONF_DIR = os.path.dirname(BUTTERKNIFE_CONF)
+BUTTERKNIFE_SECRING = os.path.join(BUTTERKNIFE_CONF_DIR, "secring.gpg")
+BUTTERKNIFE_PUBRING = os.path.join(BUTTERKNIFE_CONF_DIR, "pubring.gpg")
+BUTTERKNIFE_TRUSTED_DIR = os.path.join(BUTTERKNIFE_CONF_DIR, "trusted.gpg.d")
+os.environ["GNUPGHOME"] = BUTTERKNIFE_CONF_DIR
 
 def pool_factory(url):
     o = urlparse(url)
@@ -30,6 +42,30 @@ def pool_factory(url):
 def push_pull(source, destination, subvol):
     subvol_filter = Filter(subvol)
     for namespace, identifier, architectures in source.template_list(subvol_filter):
+        keyring = os.path.join(BUTTERKNIFE_TRUSTED_DIR, namespace.replace(".", "_") + ".gpg")
+        domain = ".".join(reversed(namespace.split(".")))
+
+        # Check if /etc/butterknife/trusted.gpg.d/<domain>.gpg keyring exists
+        # If it does not fetch it from https://<domain>/keyring.gpg
+
+        if not os.path.exists(keyring):
+            url = "https://%s/keyring.gpg" % domain
+            print("Caching keyring", keyring, "from", url)
+            conn = http.client.HTTPSConnection(domain)
+            conn.request("GET", "/keyring.gpg")
+            response = conn.getresponse()
+            body = response.read()
+
+            if response.status == 200:
+                fh = open(keyring, "wb")
+                fh.write(body)
+                fh.close()
+            else:
+                raise Exception("Failed to fetch keyring %s, server returned %d %s. Please fetch the corresponding GPG key and place to to %s" % (url, response.status, body.decode("ascii"), keyring))
+
+            # TODO: Fall back to plain HTTP if HTTPS is not configured (?)
+            # TODO: Check for sane directory permissions
+
         for architecture in architectures:
             click.echo("Processing %s.%s:%s" % (namespace, identifier, architecture))
             subset_filter = subvol_filter.subset(
@@ -145,7 +181,8 @@ def serve(subvol, user, port, listen):
     pool = LocalPool()
     click.echo("Serving %s from %s at %s:%d" % (subvol, pool, listen, port))
     from butterknife.api import TemplateResource, VersionResource, \
-        LegacyStreamingResource, SubvolResource, StreamResource, ManifestResource
+        LegacyStreamingResource, SubvolResource, StreamResource, \
+        ManifestResource, SignatureResource, KeyringResource
     import pwd
     import falcon
     from wsgiref.simple_server import make_server, WSGIServer
@@ -164,6 +201,8 @@ def serve(subvol, user, port, listen):
     app.add_route("/", SubvolResource(pool, subvol_filter))
     app.add_route("/@{subvol}/", StreamResource(pool, subvol_filter))
     app.add_route("/@{subvol}/manifest/", ManifestResource(pool, subvol_filter))
+    app.add_route("/@{subvol}/signature/", SignatureResource(pool, subvol_filter))
+    app.add_route("/keyring.gpg", KeyringResource(BUTTERKNIFE_PUBRING))
 
     httpd = make_server(listen, port, app, ThreadingWSGIServer)
     if user:
@@ -239,14 +278,14 @@ def multicast_send(subvol, pool, min_wait):
 def lxc_release(name):
 
     config = configparser.ConfigParser()
-    config.read('/etc/butterknife/butterknife.conf')
-   
+    config.read(BUTTERKNIFE_CONF)
 
     import lxc
     container=lxc.Container(name)
     if container.running:
         print("Stopping container")
         container.stop()
+
 
     ROOTFS = container.get_config_item("lxc.rootfs")
     assert os.path.isdir(ROOTFS), "No directory at %s" % ROOTFS
@@ -280,7 +319,7 @@ def lxc_release(name):
     import subprocess
     subprocess.call(cmd)
 
-    with open(os.path.join(snapdir, "rootfs/etc/butterknife/butterknife.conf"), "w") as fh:
+    with open(os.path.join(snapdir, "rootfs", BUTTERKNIFE_CONF[1:]), "w") as fh:
         config.write(fh)
 
     cmd = "btrfs", "subvolume", "snapshot", "-r", os.path.join(snapdir, "rootfs"), \
@@ -301,7 +340,7 @@ def lxc_list():
             continue
 
         config = configparser.ConfigParser()
-        config.read('/etc/butterknife/butterknife.conf')
+        config.read(BUTTERKNIFE_CONF)
         config.read(template_config)
         if "template" not in config.sections():
             config.add_section("template")
@@ -327,7 +366,7 @@ def pool_clean():
 @click.argument("name")
 def nspawn_release(name):
     config = configparser.ConfigParser()
-    config.read('/etc/butterknife/butterknife.conf')
+    config.read(BUTTERKNIFE_CONF)
     
     click.echo("Make sure that your nspawn container isn't running!")
 
@@ -386,7 +425,7 @@ def nspawn_list():
             continue
         
         config = configparser.ConfigParser()
-        config.read('/etc/butterknife/butterknife.conf')
+        config.read(BUTTERKNIFE_CONF)
         config.read(template_config)
         if "template" not in config.sections():
             config.add_section("template")
@@ -403,8 +442,75 @@ def nspawn_list():
                                                 config.get("global", "namespace"),
                                                 config.get("template", "name"),
                                                 arch))
+
+@click.command(help="Initialize Butterknife host")
+@click.option("-e", "--endpoint", default="https://" + FQDN, help="Butterknife endpoint URL")
+@click.option("-n", "--namespace", default=BUTTERKNIFE_NAMESPACE, help="Butterknife namespace")
+def init(endpoint, namespace):
+
+    if not os.path.exists(BUTTERKNIFE_CONF):
+        if not os.path.exists(BUTTERKNIFE_CONF_DIR):
+            os.makedirs(BUTTERKNIFE_CONF_DIR)
+        else:
+            print("Configuration directory", BUTTERKNIFE_CONF_DIR, "exists.")
+
+        config = configparser.ConfigParser()
+        config.add_section("global")
+        config.set("global", "namespace", namespace)
+        config.set("global", "endpoint", endpoint)
+
+        config.add_section("signing")
+        config.set("signing", "namespace", namespace)
+
+        with open(BUTTERKNIFE_CONF, 'w') as fh:
+            config.write(fh)
+
+        print("Generated %s" % BUTTERKNIFE_CONF)
+    else:
+        print("Configuration already exists in", BUTTERKNIFE_CONF)
+
+    if not os.path.exists(os.path.join(BUTTERKNIFE_CONF_DIR, "trustdb.gpg")):
+        print("Follow next steps to set up GPG in", BUTTERKNIFE_CONF_DIR, "for snapshot signatures.")
+        os.system("gpg --gen-key")
+    else:
+        print("GPG already set up")
+
+    if not os.path.exists(BUTTERKNIFE_TRUSTED_DIR):
+        os.makedirs(BUTTERKNIFE_TRUSTED_DIR)
+    else:
+        print("Trusted keyrings directory", BUTTERKNIFE_TRUSTED_DIR, "exists.")
+
+
+@click.command(help="Sign manifest")
+@click.argument("manifest")
+def sign(manifest):
+    config = configparser.ConfigParser()
+    config.read(BUTTERKNIFE_CONF)
+    signing_namespace = config.get("signing", "namespace")
+    keyring = os.path.join(os.path.dirname(BUTTERKNIFE_CONF), "secring.gpg")
+    if not os.path.exists(keyring):
+        print("Private keyring", keyring, "not available")
         
-    
+    subprocess.call(("gpg", "--armor", "--detach-sign", manifest))
+
+
+@click.command(help="Verify")
+@click.option("-s", "--subvol", default=determine_rootfs_subvol(), help="Subvolume to be checked, template of currently running rootfs by default")
+@click.option("-m", "--manifest", help="Manifest to be used for checking")
+def verify(subvol, manifest):
+    if os.getuid():
+        raise click.ClickException("Run as root or use sudo")
+    if not manifest:
+        manifest = "/var/lib/butterknife/manifests/%s" % subvol
+
+    click.echo("Verifying %s" % subvol)
+
+    if not subvol.startswith("/"):
+        subvol = os.path.join("/var/butterknife/pool", subvol)
+
+    verify_manifest(subvol) # This will raise exceptions
+    click.echo("Verification successful")
+
 @click.command(help="Instantiate template (DANGEROUS!)")
 def deploy():
     raise NotImplementedError()
@@ -428,6 +534,9 @@ nspawn.add_command(nspawn_list)
 @click.group()
 def entry_point(): pass
 
+entry_point.add_command(init)
+entry_point.add_command(sign)
+entry_point.add_command(verify)
 entry_point.add_command(serve)
 entry_point.add_command(pool_clean)
 entry_point.add_command(pull)

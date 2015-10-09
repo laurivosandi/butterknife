@@ -80,16 +80,17 @@ class SubvolResource(PoolResource):
     @templatize("index.html")
     def on_get(self, req, resp):
         def subvol_generator():
-            for j in sorted(self.pool.subvol_list(), reverse=True):
+            for subvol, signed in sorted(self.pool.subvol_list(), reverse=True):
                 if req.get_param("architecture"):
-                    if req.get_param("architecture") != j.architecture:
+                    if req.get_param("architecture") != subvol.architecture:
                         continue
                 yield {
-                    "path": str(j),
-                    "namespace": j.namespace,
-                    "identifier": j.identifier,
-                    "architecture": j.architecture,
-                    "version": j.version }
+                    "path": str(subvol),
+                    "namespace": subvol.namespace,
+                    "identifier": subvol.identifier,
+                    "architecture": subvol.architecture,
+                    "version": subvol.version,
+                    "signed": signed }
 
         return { "subvolumes": tuple(subvol_generator()) }
 
@@ -232,6 +233,31 @@ class ManifestResource(PoolResource):
             return
         suggested_filename = "%s.%s-%s-%s.csv" % (subvol.namespace, subvol.identifier, subvol.architecture, subvol.version)
         resp.set_header('Content-Type', 'text/plain')
-        resp.set_header("Content-Disposition", "attachment; filename=\"%s\"" % suggested_filename)
-
         resp.stream = self.pool.manifest(subvol)
+
+
+class KeyringResource(object):
+    def __init__(self, filename):
+        self.filename = filename
+
+    def on_get(self, req, resp):
+        resp.set_header("Content-Type", "application/x-gnupg-keyring")
+        resp.set_header("Content-Disposition", "attachment; filename=\"%s.gpg\"" % req.env["SERVER_NAME"].replace(".", "_")) # HTTP_HOST instead? Underscore *should* not be allowed in hostname
+        resp.stream = open(self.filename, "rb")
+
+
+class SignatureResource(PoolResource):
+    @parse_subvol
+    def on_get(self, req, resp, subvol):
+        if not self.subvol_filter.match(subvol):
+            resp.body = "Subvolume does not match filter"
+            resp.status = falcon.HTTP_403
+            return
+
+        try:
+            resp.stream = self.pool.signature(subvol)
+            suggested_filename = "%s.%s-%s-%s.asc" % (subvol.namespace, subvol.identifier, subvol.architecture, subvol.version)
+            resp.set_header('Content-Type', 'text/plain')
+        except FileNotFoundError:
+            resp.body = "Signature for %s not found" % subvol
+            resp.status = falcon.HTTP_404

@@ -7,6 +7,7 @@ from butterknife.fssum import generate_manifest
 from butterknife.subvol import Subvol
 
 BTRFS = "/sbin/btrfs"
+MANIFEST_DIR = "/var/lib/butterknife/manifests"
 
 class LocalPool(object):
     DEFAULT_PATH = "/var/butterknife/pool"
@@ -28,10 +29,13 @@ class LocalPool(object):
             yield namespace, identifier, tuple(architectures)
 
     def subvol_list(self):
-        return [Subvol(j) for j in os.listdir(self.path or self.DEFAULT_PATH) if j.startswith("@template:")]
+        return [(Subvol(j), os.path.exists(os.path.join(MANIFEST_DIR, j + ".asc"))) \
+            for j in os.listdir(self.path or self.DEFAULT_PATH) if j.startswith("@template:")]
         
     def receive(self, fh, subvol, parent_subvol=None):
         # TODO: Transfer to temporary directory
+        # TODO: Fetch manifest
+        # TODO: Verify manifest
         cmd = BTRFS, "receive", os.path.join(self.path), "-C"
 #        if parent_subvol:
 #            cmd += "-p", "/" + str(parent_subvol)
@@ -65,7 +69,6 @@ class LocalPool(object):
         """
         Generator for manifest, yields 7-tuples
         """
-        MANIFEST_DIR = "/var/lib/butterknife/manifests"
         subvol_path = os.path.join(self.path, str(subvol))
         builtin_path = os.path.join(subvol_path, MANIFEST_DIR[1:], str(subvol))
         manifest_path = os.path.join(MANIFEST_DIR, str(subvol))
@@ -80,13 +83,19 @@ class LocalPool(object):
         else:
             # If we don't have any stream manifest and save it under /var/lib/butterknife/manifests
             def generator():
-
                 with tempfile.NamedTemporaryFile(prefix=str(subvol), dir=MANIFEST_DIR, delete=False) as fh:
                     print("Temporarily writing to", fh.name)
                     for entry in generate_manifest(os.path.join(self.path, str(subvol))):
-                        line = ("\t".join([j if j else "-" for j in entry])).encode("utf-8")+b"\n"
+                        line = ("\t".join(["-" if j == None else str(j) for j in entry])).encode("utf-8")+b"\n"
                         fh.write(line)
                         yield line
                     print("Renaming to", manifest_path)
                     os.rename(fh.name, manifest_path)
             return generator()
+
+    def signature(self, subvol):
+        """
+        Return file object corresponding to signature file
+        """
+        return open(os.path.join(MANIFEST_DIR, "%s.asc" % subvol), "rb")
+
