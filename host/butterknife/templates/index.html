@@ -310,14 +310,14 @@ reboot</pre>
                 <td>{{subvolume.architecture}}</td>
                 <td>{{subvolume.version}}</td>
                 <td>
-                    <a href="/{{subvolume.path}}" title="Download in .far format, suitable for piping to: btrfs receive">far</a>
-                    | <a href="/{{subvolume.path}}/?format=tar" title="Download in .tar format, suitable for piping to: tar xvf -">tar</a>
-                    | <a href="/{{subvolume.path}}/manifest/" title="Download manifest">manifest</a>
-                    {% if subvolume.signed %}| <a href="/{{subvolume.path}}/signature/" title="Download signature">signature</a>{% endif %}
+                    <a href="/{{subvolume}}" title="Download in .far format, suitable for piping to: btrfs receive">far</a>
+                    | <a href="/{{subvolume}}/?format=tar" title="Download in .tar format, suitable for piping to: tar xvf -">tar</a>
+                    | <a href="/{{subvolume}}/manifest/" title="Download manifest">manifest</a>
+                    {% if subvolume.signed %}| <a href="/{{subvolume}}/signature/" title="Download signature">signature</a>{% endif %}
                 </td>
                 <td>
-                    <a href="/{{subvolume.path}}/packages/">packages</a>
-                    {% if newer_subvolume %}| <a href="/{{newer_subvolume.path}}/packages/?parent={{subvolume.path}}">diff</a>{% endif %}
+                    <a href="/{{subvolume}}/packages/">packages</a>
+                    {% if newer_subvolume %}| <a href="/{{newer_subvolume}}/packages/?parent={{subvolume}}">diff</a>{% endif %}
                 </td>
             </tr>
             {% set newer_subvolume = subvolume %}
