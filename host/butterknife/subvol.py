@@ -22,6 +22,10 @@ class Subvol(object):
         self.numeric_version = int(self.version[4:])
         self.signed = signed
 
+    @property
+    def domain(self):
+        return ".".join(reversed(self.namespace.split(".")))
+
     def __repr__(self):
         return str(self)
 

@@ -187,7 +187,7 @@ def serve(subvol, user, port, listen):
     click.echo("Serving %s from %s at %s:%d" % (subvol, pool, listen, port))
     from butterknife.api import TemplateResource, VersionResource, \
         LegacyStreamingResource, SubvolResource, StreamResource, \
-        ManifestResource, SignatureResource, KeyringResource
+        ManifestResource, SignatureResource, KeyringResource, PackageDiff
     import pwd
     import falcon
     from wsgiref.simple_server import make_server, WSGIServer
@@ -207,6 +207,7 @@ def serve(subvol, user, port, listen):
     app.add_route("/@{subvol}/", StreamResource(pool, subvol_filter))
     app.add_route("/@{subvol}/manifest/", ManifestResource(pool, subvol_filter))
     app.add_route("/@{subvol}/signature/", SignatureResource(pool, subvol_filter))
+    app.add_route("/@{subvol}/packages/", PackageDiff(pool, subvol_filter))
     app.add_route("/keyring.gpg", KeyringResource(BUTTERKNIFE_PUBRING))
 
     httpd = make_server(listen, port, app, ThreadingWSGIServer)

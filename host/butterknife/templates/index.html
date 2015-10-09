@@ -82,7 +82,7 @@
         }
         
         #container {
-            width: 720px;
+            width: 960px;
             margin: 1em auto;
             background: #fff;
             padding: 1em;
@@ -91,10 +91,46 @@
             border-color: #aaa;
             border-radius: 10px;
         }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        li {
+            font-family: monospace;
+            font-size: 12pt;
+        }
+
+        li span.version {
+            font-size: 8pt;
+            border-radius: 3px;
+            padding: 2px;
+            margin: 2px 0;
+        }
+
+        li {
+            padding-bottom: 1px;
+            border-bottom: 1px solid #eee;
+            clear: right;
+        }
+
+        .package.new.version {
+            background-color: #A6F3A6;
+        }
+
+        .package.old.version {
+            background-color: #F8CBCB;
+        }
+
+        .package.version.container {
+            float: right;
+        }
     </style>
 </head>
 <body>
 <div id="container">
+    {% block container %}
     <h1>Butterknife server at {{ request.host }}</h1>
     
     
@@ -260,32 +296,34 @@ reboot</pre>
     
     <table style="border-collapse:collapse; width:100%;">
         <tr>
-            <th>Namespace</th>
-            <th>Identifier</th>
+            <th>Owner</th>
+            <th>Name</th>
             <th>Architecture</th>
             <th>Version</th>
             <th>Stream</th>
-
+            <th>Actions</th>
         </tr>
         {% for subvolume in subvolumes %}
             <tr>
-                <td>{{subvolume.namespace}}</td>
+                <td>{{subvolume.domain}}</td>
                 <td>{{subvolume.identifier}}</td>
                 <td>{{subvolume.architecture}}</td>
                 <td>{{subvolume.version}}</td>
                 <td>
-                    <a href="/{{subvolume.path}}" title="Download in .far format, suitable for piping to: btrfs receive">far</a> |
-                    <a href="/{{subvolume.path}}/?format=tar" title="Download in .tar format, suitable for piping to: tar xvf -">tar</a> |
-                    <a href="/{{subvolume.path}}/manifest/" title="Download manifest">manifest</a>
-                    {% if subvolume.signed %}
-                        | <a href="/{{subvolume.path}}/signature/" title="Download signature">signature</a>
-                    {% endif %}
-
+                    <a href="/{{subvolume.path}}" title="Download in .far format, suitable for piping to: btrfs receive">far</a>
+                    | <a href="/{{subvolume.path}}/?format=tar" title="Download in .tar format, suitable for piping to: tar xvf -">tar</a>
+                    | <a href="/{{subvolume.path}}/manifest/" title="Download manifest">manifest</a>
+                    {% if subvolume.signed %}| <a href="/{{subvolume.path}}/signature/" title="Download signature">signature</a>{% endif %}
                 </td>
-
+                <td>
+                    <a href="/{{subvolume.path}}/packages/">packages</a>
+                    {% if newer_subvolume %}| <a href="/{{newer_subvolume.path}}/packages/?parent={{subvolume.path}}">diff</a>{% endif %}
+                </td>
             </tr>
+            {% set newer_subvolume = subvolume %}
         {% endfor %}
     </table>
+{% endblock %}
 </div>
 
 </body>

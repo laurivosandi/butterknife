@@ -84,13 +84,7 @@ class SubvolResource(PoolResource):
                 if req.get_param("architecture"):
                     if req.get_param("architecture") != subvol.architecture:
                         continue
-                yield {
-                    "path": str(subvol),
-                    "namespace": subvol.namespace,
-                    "identifier": subvol.identifier,
-                    "architecture": subvol.architecture,
-                    "version": subvol.version,
-                    "signed": subvol.signed }
+                yield subvol
 
         return { "subvolumes": tuple(subvol_generator()) }
 
@@ -261,3 +255,95 @@ class SignatureResource(PoolResource):
         except FileNotFoundError:
             resp.body = "Signature for %s not found" % subvol
             resp.status = falcon.HTTP_404
+
+
+class PackageDiff(PoolResource):
+    @templatize("packages.html")
+    @parse_subvol
+    def on_get(self, req, resp, subvol):
+        print(subvol.domain)
+        if not self.subvol_filter.match(subvol):
+            resp.body = "Subvolume does not match filter"
+            resp.status = falcon.HTTP_403
+            return
+
+        parent_subvol = req.get_param("parent")
+
+        # TODO: Add heuristics to determine package management system
+
+        def dpkg_list(root):
+            """
+            Return dict of package names and versions corresponding to a
+            Debian/Ubuntu etc root filesystem
+            """
+            package_name = None
+            package_version = None
+            versions = {}
+
+            for line in open(os.path.join(root, "var/lib/dpkg/status")):
+                line = line[:-1]
+                if not line:
+                    assert package_name, "No package name specified!"
+                    assert package_version, "No package version specified!"
+                    versions[package_name] = package_version
+                    package_name = None
+                    package_version = None
+                    continue
+
+                if ": " not in line:
+                    continue
+
+                key, value = line.split(": ", 1)
+
+                if key == "Package":
+                    package_name = value
+                    continue
+                if key == "Version":
+                    package_version = value
+                    continue
+            return versions
+
+        if not parent_subvol:
+            packages_intact = dpkg_list("/var/butterknife/pool/%s" % subvol)
+            return {
+                "packages_intact": sorted(packages_intact.items())
+            }
+
+
+        if not self.subvol_filter.match(Subvol(parent_subvol)):
+            resp.body = "Parnt subvolume does not match filter"
+            resp.status = falcon.HTTP_403
+            return
+
+        old = dpkg_list("/var/butterknife/pool/%s" % parent_subvol)
+        new = dpkg_list("/var/butterknife/pool/%s" % subvol)
+
+        def upgraded_generator():
+            for key in sorted(set(new) & set(old)):
+                old_version = old[key]
+                new_version = new[key]
+
+                if old_version != new_version:
+                    yield key, old_version, new_version
+
+        def intact_generator():
+            for key in sorted(set(new) & set(old)):
+                old_version = old[key]
+                new_version = new[key]
+
+                if old_version == new_version:
+                    yield key, old_version
+
+        def added_generator():
+            for key in sorted(set(new) - set(old)):
+                yield key, new[key]
+
+        def removed_generator():
+            for key in sorted(set(old) - set(new)):
+                yield key, old[key]
+
+        return {
+            "packages_intact": intact_generator(),
+            "packages_upgraded": upgraded_generator(),
+            "packages_added": tuple( added_generator()),
+            "packages_removed": removed_generator() }

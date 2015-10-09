@@ -1,0 +1,40 @@
+{% extends "index.html" %}
+
+{% block container %}
+    <h1>Butterknife server at {{ request.host }}</h1>
+
+    <h2>Added packages</h2>
+    <ul>
+    {% for package, version in packages_added %}
+      <li>{{ package }} <span class="package new version container">{{ version }}</span></li>
+    {% endfor %}
+    </ul>
+
+    <h2>Updated packages</h2>
+    <ul>
+    {% for package, old_version, new_version in packages_upgraded %}
+      <li class="package upgraded">
+        <span class="package name">{{ package }}</span>
+
+        <span class="package version container">
+             <span class="package old version">{{ old_version }}</span> ➜
+          <span class="package new version">{{ new_version }}</span>
+        </span>
+      </li>
+    {% endfor %}
+    </ul>
+
+    <h2>Removed packages</h2>
+    <ul>
+    {% for package, version in packages_removed %}
+      <li>{{ package }} <span class="package old version container">{{ version }}</span></li>
+    {% endfor %}
+    </ul>
+
+    <h2>Other packages</h2>
+    <ul>
+    {% for package, version in packages_intact %}
+      <li>{{ package }} <span class="package version container">{{ version }}</span></li>
+    {% endfor %}
+    </ul>
+{% endblock %}
