@@ -80,7 +80,7 @@ class SubvolResource(PoolResource):
     @templatize("index.html")
     def on_get(self, req, resp):
         def subvol_generator():
-            for subvol, signed in sorted(self.pool.subvol_list(), reverse=True):
+            for subvol in sorted(self.pool.subvol_list(), reverse=True):
                 if req.get_param("architecture"):
                     if req.get_param("architecture") != subvol.architecture:
                         continue
@@ -90,7 +90,7 @@ class SubvolResource(PoolResource):
                     "identifier": subvol.identifier,
                     "architecture": subvol.architecture,
                     "version": subvol.version,
-                    "signed": signed }
+                    "signed": subvol.signed }
 
         return { "subvolumes": tuple(subvol_generator()) }
 
@@ -108,7 +108,7 @@ class VersionResource(PoolResource):
         subset_filter = self.subvol_filter.subset(namespace=namespace,
             identifier=identifier, architecture=arch)
         return { "versions": map(
-            lambda v:{"identifier":v},
+            lambda v:{"identifier":v, "signed":v.signed},
             sorted(subset_filter.apply(self.pool.subvol_list()), reverse=True, key=lambda j:j.numeric_version)) }
 
 class LegacyStreamingResource(PoolResource):

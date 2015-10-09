@@ -133,11 +133,14 @@ def list(subvol, pool):
         
         
 class Filter(object):
-    def __init__(self, pattern="@template:*.*:*:*"):
+    def __init__(self, pattern="@template:*.*:*:*", signed=False):
         self.category, name, self.architecture, self.version = pattern.split(":")
         self.namespace, self.identifier = name.rsplit(".", 1)
+        self.signed = signed
 
     def match(self, subvol):
+        if self.signed and not subvol.signed: # Subvolume is not signed, but signature is required
+            return False
         if self.category != "*" and self.category != subvol.category:
 #            print("Category %s fails filter %s" % (self.category, subvol.category))
             return False
@@ -160,14 +163,16 @@ class Filter(object):
             if self.match(i):
                 yield i
                 
-    def subset(self, namespace="*", identifier="*", architecture="*", version="*"):
+    def subset(self, namespace="*", identifier="*", architecture="*", version="*", signed=False):
         return Filter(
             "%s:%s.%s:%s:%s" % (
                 self.category,
                 self.namespace if namespace == "*" else namespace,
                 self.identifier if identifier == "*" else identifier,
                 self.architecture if architecture == "*" else architecture,
-                self.version if version == "*" else version))
+                self.version if version == "*" else version),
+                True if signed else self.signed)
+
 
 @click.command("serve", help="Run built-in HTTP server")
 @click.argument("subvol", default="@template:*.*:*:*")

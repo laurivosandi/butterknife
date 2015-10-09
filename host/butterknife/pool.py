@@ -29,7 +29,7 @@ class LocalPool(object):
             yield namespace, identifier, tuple(architectures)
 
     def subvol_list(self):
-        return [(Subvol(j), os.path.exists(os.path.join(MANIFEST_DIR, j + ".asc"))) \
+        return [(Subvol(j, signed=os.path.exists(os.path.join(MANIFEST_DIR, j + ".asc")))) \
             for j in os.listdir(self.path or self.DEFAULT_PATH) if j.startswith("@template:")]
         
     def receive(self, fh, subvol, parent_subvol=None):
