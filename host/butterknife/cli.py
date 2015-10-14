@@ -9,7 +9,6 @@ import subprocess
 import http.client
 import urllib.request
 from butterknife.pool import LocalPool
-from butterknife.update import butterknife_update
 from butterknife.subvol import Subvol, determine_rootfs_subvol
 from butterknife.verify import verify_manifest
 from urllib.parse import urlparse
@@ -509,8 +508,13 @@ def verify(subvol, manifest):
     if not manifest:
         manifest = "/var/lib/butterknife/manifests/%s" % subvol
 
+    if not subvol:
+        raise click.ClickException("Failed to determine template corresponding to root filesystem, try specifying particular template to verify")
+
     click.echo("Verifying %s" % subvol)
 
+    if subvol.endswith("/"):
+        subvol = subvol[:-1]
     if not subvol.startswith("/"):
         subvol = os.path.join("/var/butterknife/pool", subvol)
 
