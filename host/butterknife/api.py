@@ -55,6 +55,7 @@ def templatize(path):
             assert not req.get_param("unicode") or req.get_param("unicode") == u"✓", "Unicode sanity check failed"
 
             r = func(instance, req, resp, **kwargs)
+            r.pop("self")
 
             if not resp.body:
                 if  req.get_header("Accept") == "application/json":
@@ -269,7 +270,8 @@ class PackageDiff(PoolResource):
 
         parent_subvol = req.get_param("parent")
 
-        # TODO: Add heuristics to determine package management system
+        # TODO: Add heuristics to determine package management system,
+        #       at least don't die with RPM systems
 
         def dpkg_list(root):
             """
@@ -303,47 +305,36 @@ class PackageDiff(PoolResource):
                     continue
             return versions
 
-        if not parent_subvol:
-            packages_intact = dpkg_list("/var/butterknife/pool/%s" % subvol)
-            return {
-                "packages_intact": sorted(packages_intact.items())
-            }
-
-
-        if not self.subvol_filter.match(Subvol(parent_subvol)):
-            resp.body = "Parnt subvolume does not match filter"
-            resp.status = falcon.HTTP_403
-            return
-
-        old = dpkg_list("/var/butterknife/pool/%s" % parent_subvol)
         new = dpkg_list("/var/butterknife/pool/%s" % subvol)
 
-        def upgraded_generator():
+        if not parent_subvol:
+            packages_diff = False
+            packages_intact = sorted(new.items())
+        else:
+            packages_diff = True
+            if not self.subvol_filter.match(Subvol(parent_subvol)):
+                resp.body = "Parent subvolume does not match filter"
+                resp.status = falcon.HTTP_403
+                return
+
+            old = dpkg_list("/var/butterknife/pool/%s" % parent_subvol)
+
+            packages_added = []
+            packages_removed = []
+            packages_updated = []
+            packages_intact = []
+
             for key in sorted(set(new) & set(old)):
                 old_version = old[key]
                 new_version = new[key]
-
                 if old_version != new_version:
-                    yield key, old_version, new_version
+                    packages_updated.append((key, old_version, new_version))
+                else:
+                    packages_intact.append((key, old_version))
 
-        def intact_generator():
-            for key in sorted(set(new) & set(old)):
-                old_version = old[key]
-                new_version = new[key]
-
-                if old_version == new_version:
-                    yield key, old_version
-
-        def added_generator():
             for key in sorted(set(new) - set(old)):
-                yield key, new[key]
+                packages_added.append((key, new[key]))
 
-        def removed_generator():
             for key in sorted(set(old) - set(new)):
-                yield key, old[key]
-
-        return {
-            "packages_intact": intact_generator(),
-            "packages_upgraded": upgraded_generator(),
-            "packages_added": tuple( added_generator()),
-            "packages_removed": removed_generator() }
+                packages_removed.append((key, old[key]))
+        return locals()

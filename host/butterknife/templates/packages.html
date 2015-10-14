@@ -3,35 +3,54 @@
 {% block container %}
     <h1>Butterknife server at {{ request.host }}</h1>
 
-    <h2>Added packages</h2>
-    <ul>
-    {% for package, version in packages_added %}
-      <li>{{ package }} <span class="package new version container">{{ version }}</span></li>
-    {% endfor %}
-    </ul>
+    <h2>Package management</h2>
 
-    <h2>Updated packages</h2>
-    <ul>
-    {% for package, old_version, new_version in packages_upgraded %}
-      <li class="package upgraded">
-        <span class="package name">{{ package }}</span>
+    {% if packages_diff %}
+        {% if packages_added %}
+            <p>Added packages ({{ packages_added | length }}):</p>
+            <ul>
+            {% for package, version in packages_added %}
+              <li>{{ package }} <span class="package new version container">{{ version }}</span></li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <p>No packages added</p>
+        {% endif %}
 
-        <span class="package version container">
-             <span class="package old version">{{ old_version }}</span> ➜
-          <span class="package new version">{{ new_version }}</span>
-        </span>
-      </li>
-    {% endfor %}
-    </ul>
+        {% if packages_updated %}
+            <p>Updated packages ({{ packages_updated | length }}):</p>
+            <ul>
+            {% for package, old_version, new_version in packages_updated %}
+              <li class="package upgraded">
+                <span class="package name">{{ package }}</span>
 
-    <h2>Removed packages</h2>
-    <ul>
-    {% for package, version in packages_removed %}
-      <li>{{ package }} <span class="package old version container">{{ version }}</span></li>
-    {% endfor %}
-    </ul>
+                <span class="package version container">
+                     <span class="package old version">{{ old_version }}</span> &#8594;
+                  <span class="package new version">{{ new_version }}</span>
+                </span>
+              </li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <p>No packages updated.</p>
+        {% endif %}
 
-    <h2>Other packages</h2>
+        {% if packages_removed %}
+            <p>Removed packages ({{ packages_removed | length }}):</p>
+            <ul>
+            {% for package, version in packages_removed %}
+              <li>{{ package }} <span class="package old version container">{{ version }}</span></li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <p>No packages removed.</p>
+        {% endif %}
+
+        <p>Other packages ({{ packages_intact | length }}):</p>
+    {% else %}
+        <p>Installed packages ({{ packages_intact | length }}):</p>
+    {% endif %}
+
     <ul>
     {% for package, version in packages_intact %}
       <li>{{ package }} <span class="package version container">{{ version }}</span></li>
