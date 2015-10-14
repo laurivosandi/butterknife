@@ -45,13 +45,13 @@ You can install up to date kernel on 14.04 simply by doing following:
 
 .. code:: bash
 
-    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.14-vivid/linux-headers-3.18.14-031814-generic_3.18.14-031814.201505210236_amd64.deb
-    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.14-vivid/linux-headers-3.18.14-031814_3.18.14-031814.201505210236_all.deb
-    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.14-vivid/linux-image-3.18.14-031814-generic_3.18.14-031814.201505210236_amd64.deb
+    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.22-vivid/linux-headers-3.18.22-031822-generic_3.18.22-031822.201510031227_amd64.deb
+    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.22-vivid/linux-headers-3.18.22-031822_3.18.22-031822.201510031227_all.deb
+    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.22-vivid/linux-image-3.18.22-031822-generic_3.18.22-031822.201510031227_amd64.deb
     sudo dpkg -i \
-        linux-headers-3.18.14-031814-generic_3.18.14-031814.201505210236_amd64.deb \
-        linux-headers-3.18.14-031814_3.18.14-031814.201505210236_all.deb \
-        linux-image-3.18.14-031814-generic_3.18.14-031814.201505210236_amd64.deb
+        linux-headers-3.18.22-031822-generic_3.18.22-031822.201510031227_amd64.deb \
+        linux-headers-3.18.22-031822_3.18.22-031822.201510031227_all.deb \
+        linux-image-3.18.22-031822-generic_3.18.22-031822.201510031227_amd64.deb
 
 You also need updated btrfs-tools:
 
