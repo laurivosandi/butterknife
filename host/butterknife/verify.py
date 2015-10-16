@@ -12,6 +12,24 @@ class VerificationError(Exception):
     pass
 
 def verify_manifest(subvolume):
+
+    def urlopen(hostname, path):
+        conn = http.client.HTTPConnection(domain)
+        conn.request("GET", path)
+        response = conn.getresponse()
+
+        # Determine if we had HTTP -> HTTPS redirect
+        if response.status == 302:
+            response.read()
+            redirect = response.headers.get("Location")
+            if redirect != "https://" + hostname + path:
+                raise VerificationError("Not allowed redirect to %s, would allow https://%s%s" % (redirect, hostname, path))
+            conn = http.client.HTTPSConnection(domain)
+            conn.request("GET", path)
+            response = conn.getresponse()
+
+        return response
+
     RE_SUBVOL = "@template:(?P<domain>[\w\d]+(\.[\w\d]+)+)\.([\W\w\d]+):"
     subvol_basename = os.path.basename(subvolume)
 
@@ -34,15 +52,12 @@ def verify_manifest(subvolume):
             print("Creating directory", TRUSTED_PATH)
             os.makedirs(TRUSTED_PATH)
 
-        conn = http.client.HTTPConnection(domain)
-        conn.request("GET", "/keyring.gpg")
-        response = conn.getresponse()
-        body = response.read()
+        response = urlopen(domain, "/keyring.gpg")
 
         if response.status == 200:
             with tempfile.NamedTemporaryFile(dir=TRUSTED_PATH, prefix=".", delete=False) as fh:
                 print("Writing keyring to file %s" % fh.name)
-                fh.write(body)
+                fh.write(response.read())
                 print("Moving", fh.name, "to", keyring_path)
                 os.rename(fh.name, keyring_path)
         else:
@@ -58,17 +73,13 @@ def verify_manifest(subvolume):
     else:
         # Otherwise attempt to fetch signature from origin
         print("Fetching signature from http://%s/%s/signature" % (domain, subvol_basename))
-        conn = http.client.HTTPConnection(domain)
-        conn.request("GET", "/%s/signature" % subvol_basename)
-        response = conn.getresponse()
-
-        body = response.read()
+        response = urlopen(domain, "/%s/signature" % subvol_basename)
 
         if response.status != 200:
-            raise VerificationError(body.decode("ascii"))
+            raise VerificationError(response.read().decode("ascii"))
         with tempfile.NamedTemporaryFile(dir=os.path.dirname(signature_path), prefix=".", delete=False) as sfh:
             print("Writing signature to file %s" % sfh.name)
-            sfh.write(body)
+            sfh.write(response.read())
 
     if os.path.exists(manifest_path):
         # Manifest is already present locally, assume it's valid
@@ -78,9 +89,7 @@ def verify_manifest(subvolume):
     else:
         # Fetch manifest from the origin
         print("Streaming http://%s/%s/manifest" % (domain, subvol_basename))
-        conn = http.client.HTTPConnection(domain)
-        conn.request("GET", "/%s/manifest" % subvol_basename)
-        response = conn.getresponse()
+        response = urlopen(domain, "/%s/manifest" % subvol_basename)
         mfh = tempfile.NamedTemporaryFile(dir=os.path.dirname(manifest_path), prefix=".", delete=False)
 
     # Read manifest from stdin line by line
@@ -88,6 +97,7 @@ def verify_manifest(subvolume):
     print("Invoking in the background:", " ".join(cmd))
 
     # Generate manifest for the template subvolume
+    print("Recursing over:", subvolume)
     local_manifest = generate_manifest(subvolume)
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
 
