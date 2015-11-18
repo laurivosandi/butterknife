@@ -124,7 +124,7 @@ case $TRANSFER_METHOD in
             purge)
                 clear
                 echo "Purging whole disk"
-                echo -e "o\nn\np\n\n\n\nw" | fdisk $DISK
+                echo -e "o\nn\np\n\n\n\na\n1\nw" | fdisk $DISK
             ;;
             reformat|receive)
                 # NOOP
