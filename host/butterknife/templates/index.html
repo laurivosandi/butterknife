@@ -300,6 +300,7 @@ reboot</pre>
             <th>Name</th>
             <th>Architecture</th>
             <th>Version</th>
+            <th>Released</th>
             <th>Stream</th>
             <th>Actions</th>
         </tr>
@@ -309,6 +310,7 @@ reboot</pre>
                 <td>{{subvolume.identifier}}</td>
                 <td>{{subvolume.architecture}}</td>
                 <td>{{subvolume.version}}</td>
+                <td>{{subvolume.created}}</td>
                 <td>
                     <a href="/{{subvolume}}" title="Download in .far format, suitable for piping to: btrfs receive">far</a>
                     | <a href="/{{subvolume}}/?format=tar" title="Download in .tar format, suitable for piping to: tar xvf -">tar</a>

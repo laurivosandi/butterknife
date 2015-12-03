@@ -13,7 +13,7 @@ class SubvolNotFound(Exception):
     pass
 
 class Subvol(object):
-    def __init__(self, subvol, signed=False):
+    def __init__(self, subvol, signed=False, created=None):
         if "/" in subvol:
             raise Exception("Invalid subvolume base name, contains /")
         self.category, fqn, self.architecture, self.version = subvol.split(":")
@@ -21,6 +21,7 @@ class Subvol(object):
         assert self.version.startswith("snap")
         self.numeric_version = int(self.version[4:])
         self.signed = signed
+        self.created = created
 
     @property
     def domain(self):

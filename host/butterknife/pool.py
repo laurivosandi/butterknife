@@ -3,6 +3,7 @@ import click
 import os
 import subprocess
 import tempfile
+from datetime import datetime
 from butterknife.fssum import generate_manifest
 from butterknife.subvol import Subvol
 
@@ -29,8 +30,11 @@ class LocalPool(object):
             yield namespace, identifier, tuple(architectures)
 
     def subvol_list(self):
-        return [(Subvol(j, signed=os.path.exists(os.path.join(MANIFEST_DIR, j + ".asc")))) \
-            for j in os.listdir(self.path or self.DEFAULT_PATH) if j.startswith("@template:")]
+        d = self.path or self.DEFAULT_PATH
+        return [(Subvol(j,
+                signed=os.path.exists(os.path.join(MANIFEST_DIR, j + ".asc")),
+                created=datetime.fromtimestamp(os.stat(os.path.join(d, j)).st_mtime))) \
+            for j in os.listdir(d) if j.startswith("@template:")]
         
     def receive(self, fh, subvol, parent_subvol=None):
         # TODO: Transfer to temporary directory
