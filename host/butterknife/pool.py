@@ -33,7 +33,7 @@ class LocalPool(object):
         d = self.path or self.DEFAULT_PATH
         return [(Subvol(j,
                 signed=os.path.exists(os.path.join(MANIFEST_DIR, j + ".asc")),
-                created=datetime.fromtimestamp(os.stat(os.path.join(d, j)).st_mtime))) \
+                created=datetime.fromtimestamp(int(os.stat(os.path.join(d, j)).st_mtime)))) \
             for j in os.listdir(d) if j.startswith("@template:")]
         
     def receive(self, fh, subvol, parent_subvol=None):
