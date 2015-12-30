@@ -7,7 +7,7 @@ from setuptools import setup
 
 setup(
     name = "butterknife",
-    version = "0.1.15",
+    version = "0.1.16",
     author = u"Lauri Võsandi",
     author_email = "lauri.vosandi@gmail.com",
     description = "Butterknife makes bare-metal Linux deployment dead-simple using the Linux Containers (LXC) and Btrfs filesystem.",
