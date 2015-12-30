@@ -184,7 +184,7 @@ case $TRANSFER_METHOD in
 
         # Attempt to mount target directory
         mkdir -p $POOL_MOUNTPOINT
-        mount $PARTITION $POOL_MOUNTPOINT -o subvol=/
+        mount $PARTITION $POOL_MOUNTPOINT -o subvol=/ -t btrfs
         if [ $? -ne 0 ]; then
             dialog --msgbox "Mounting $PARTITION at $POOL_MOUNTPOINT failed, are you sure kernel has btrfs support built-in?" 0 0
             exit 255
