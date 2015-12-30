@@ -2,93 +2,93 @@
 
 set -e
 
-while :
-do
-    action=$(dialog --menu "Advanced options, consider your warranty VOID!" 0 0 0 \
-        shell           "Drop to shell" \
-        instance        "Instance maintenance and recovery" \
-        subvol          "Delete instances/templates" \
-        restore         "Restore Windows master boot record" \
-        2>&1 >$(tty))
-        
-    clear
-    
-    case $action in
-        shell)
-            sh
-        ;;
-        instance)
-            export BUTTERKNIFE_PARTITION=$(butterknife-select-btrfs-filesystem 2>&1 >$(tty))
+action=$(dialog --menu "Advanced options, consider your warranty VOID!" 0 0 0 \
+    shell           "Drop to shell" \
+    instance        "Instance maintenance and recovery" \
+    subvol          "Delete instances/templates" \
+    restore         "Restore Windows master boot record" \
+    2>&1 >$(tty))
+clear
 
-            # Probe instances
-            pool_mountpoint=$(mktemp -d)
-            subvols=$(mktemp)
-            mount $BUTTERKNIFE_PARTITION $pool_mountpoint -o subvol=/            
-            for subvol in $(ls $pool_mountpoint | grep "^@root:" | sort -r); do
-                echo "$subvol \"\""
-            done > $subvols
-            if [ -d $pool_mountpoint/deployments ]; then
-                for timestamp in $(ls $pool_mountpoint/deployments | sort -r); do
-                    echo "deployments/$timestamp \"\""
-                done >> $subvols
-            fi
-            umount $pool_mountpoint
-            rmdir $pool_mountpoint
+case $action in
+    shell)
+        sh
+    ;;
+    instance)
+        export BUTTERKNIFE_PARTITION=$(butterknife-select-btrfs-filesystem 2>&1 >$(tty))
 
-            # Select instance
-            export BUTTERKNIFE_DEPLOY_SUBVOL=$(dialog \
-                --menu "Select instance" 0 0 0 \
-                --file $subvols 2>&1 >$(tty))
-    
-            # TODO: Export BUTTERKNIFE_DISK for grub-install MBR
-            instance_mountpoint=$(mktemp -d)
-            mount $BUTTERKNIFE_PARTITION -o subvol=$BUTTERKNIFE_DEPLOY_SUBVOL $instance_mountpoint
-            mount --bind /dev $instance_mountpoint/dev
-            mount --bind /sys $instance_mountpoint/sys
-            mount --bind /proc $instance_mountpoint/proc
-            if [ -d $instance_mountpoint/var/butterknife/persistent ]; then
-                mount --bind /proc $instance_mountpoint/var/butterknife/persistent
-            fi
-            clear
-            echo "Mounted $BUTTERKNIFE_PARTITION$BUTTERKNIFE_DEPLOY_SUBVOL at $instance_mountpoint"
-            echo "Chrooting into $instance_mountpoint"
-            hostname $(cat $instance_mountpoint/etc/hostname)
-            cat /etc/resolv.conf > $instance_mountpoint/etc/resolv.conf
-            chroot $instance_mountpoint
-            umount $instance_mountpoint/dev
-            umount $instance_mountpoint/sys
-            umount $instance_mountpoint/proc
-            if [ -d $instance_mountpoint/var/butterknife/persistent ]; then
-                umount $instance_mountpoint/var/butterknife/persistent
-            fi
-            echo "Unmounting $instance_mountpoint"
-            umount $instance_mountpoint
-            rmdir $instance_mountpoint
-        ;;
-        subvol)
-            BUTTERKNIFE_PARTITION=$(butterknife-select-btrfs-filesystem 2>&1 >$(tty))
-            mountpoint=$(mktemp -d)
-            mount $BUTTERKNIFE_PARTITION -o subvol=/ $mountpoint
-            subvols=$(mktemp)
-            for subvol in $(btrfs subvol list $mountpoint | cut -d ' ' -f 9 | sort -r); do
-                echo "$subvol \"\""
-            done > $subvols
-            selected_subvol=$(dialog --menu "Select subvolume to delete on $BUTTERKNIFE_PARTITION" 0 0 0 \
-                --file $subvols 2>&1 >$(tty))
-            rm -f $subvols
-            btrfs subvol delete -c $mountpoint/$selected_subvol
-            umount $mountpoint
-            rmdir $mountpoint
-        ;;
-        restore)
-            BUTTERKNIFE_DISK=$(butterknife-select-disk)
-            action=$(dialog --menu "Which master boot record would you like to restore? Make sure right partition is set active." 0 0 0 \
-                mbr7          "Windows 7" \
-                mbrvista      "Windows Vista" \
-                mbr           "Windows 2000/XP/2003" \
-                2>&1 >$(tty))
-            clear
-            ms-sys $action $BUTTERKNIFE_DISK
-        ;;
-    esac
-done
+        # Probe instances
+        pool_mountpoint=$(mktemp -d)
+        subvols=$(mktemp)
+        mount $BUTTERKNIFE_PARTITION $pool_mountpoint -o subvol=/
+        for subvol in $(ls $pool_mountpoint | grep "^@root:" | sort -r); do
+            echo "$subvol \"\""
+        done > $subvols
+        if [ -d $pool_mountpoint/deployments ]; then
+            for timestamp in $(ls $pool_mountpoint/deployments | sort -r); do
+                echo "deployments/$timestamp \"\""
+            done >> $subvols
+        fi
+        umount $pool_mountpoint
+        rmdir $pool_mountpoint
+
+        # Select instance
+        export BUTTERKNIFE_DEPLOY_SUBVOL=$(dialog \
+            --menu "Select instance" 0 0 0 \
+            --file $subvols 2>&1 >$(tty))
+
+        # TODO: Export BUTTERKNIFE_DISK for grub-install MBR
+        instance_mountpoint=$(mktemp -d)
+        mount $BUTTERKNIFE_PARTITION -o subvol=$BUTTERKNIFE_DEPLOY_SUBVOL $instance_mountpoint
+        mount --bind /dev $instance_mountpoint/dev
+        mount --bind /sys $instance_mountpoint/sys
+        mount --bind /proc $instance_mountpoint/proc
+        if [ -d $instance_mountpoint/var/butterknife/persistent ]; then
+            mount --bind /proc $instance_mountpoint/var/butterknife/persistent
+        fi
+        clear
+        echo "Mounted $BUTTERKNIFE_PARTITION$BUTTERKNIFE_DEPLOY_SUBVOL at $instance_mountpoint"
+        echo "Chrooting into $instance_mountpoint"
+        hostname $(cat $instance_mountpoint/etc/hostname)
+        cat /etc/resolv.conf > $instance_mountpoint/etc/resolv.conf
+        chroot $instance_mountpoint
+        umount $instance_mountpoint/dev
+        umount $instance_mountpoint/sys
+        umount $instance_mountpoint/proc
+        if [ -d $instance_mountpoint/var/butterknife/persistent ]; then
+            umount $instance_mountpoint/var/butterknife/persistent
+        fi
+        echo "Unmounting $instance_mountpoint"
+        umount $instance_mountpoint
+        rmdir $instance_mountpoint
+    ;;
+    subvol)
+        BUTTERKNIFE_PARTITION=$(butterknife-select-btrfs-filesystem 2>&1 >$(tty))
+        mountpoint=$(mktemp -d)
+        mount $BUTTERKNIFE_PARTITION -o subvol=/ $mountpoint
+        subvols=$(mktemp)
+        for subvol in $(btrfs subvol list $mountpoint | cut -d ' ' -f 9 | sort -r); do
+            echo "$subvol \"\""
+        done > $subvols
+        selected_subvol=$(dialog --menu "Select subvolume to delete on $BUTTERKNIFE_PARTITION" 0 0 0 \
+            --file $subvols 2>&1 >$(tty))
+        rm -f $subvols
+        btrfs subvol delete -c $mountpoint/$selected_subvol
+        umount $mountpoint
+        rmdir $mountpoint
+    ;;
+    restore)
+        export disk=$(butterknife-select-disk 2>&1 >$(tty))
+
+        # Select MBR type
+        action=$(dialog --menu "What kind of master boot record would you like to restore? You might have to mark partition bootable using fdisk." 0 0 0 \
+            mbr7          "Windows 7/8/10" \
+            mbrvista      "Windows Vista" \
+            mbr           "Windows 2000/XP/2003" \
+            2>&1 >$(tty))
+        clear
+        ms-sys --$action $disk
+        sleep 1
+    ;;
+esac
+

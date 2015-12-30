@@ -17,8 +17,14 @@ for disk in /dev/sd?; do
         echo "$disk \"$(cat $sys_disk/device/model | xargs) ($size)\"";
     fi
 done > $disks
-dialog --menu "Target disk" 0 0 0 \
-    --file $disks
+
+if [ -z $size ]; then
+    dialog --msgbox "Unable to detect any disks" 0 0
+    return 1
+else
+    dialog --menu "Target disk" 0 0 0 \
+        --file $disks
+fi
 
 rm -f $disks
 
