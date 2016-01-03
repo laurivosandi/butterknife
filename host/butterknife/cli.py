@@ -250,7 +250,7 @@ def serve(subvol, user, port, listen):
             b"_butterknife._tcp",
             b"local",
             (socket.gethostname() + ".local").encode("ascii"),
-            dbus.UInt16(port), [b"path=/api/"])
+            dbus.UInt16(port), [b"path=/"])
         group.Commit()
 
     httpd.serve_forever()

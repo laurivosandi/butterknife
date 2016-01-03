@@ -225,7 +225,7 @@ case $TRANSFER_METHOD in
             bk_url=$(dialog --menu "Select server" 0 0 0 \
                 mdns:// "Autodiscover" \
                 $URL_LOCAL                       "Manually enter" \
-                https://butterknife.koodur.com/api/   "Koodur LLC" 2>&1 >$(tty))
+                https://butterknife.koodur.com   "Koodur LLC" 2>&1 >$(tty))
 
             if [ "$bk_url" == "mdns://" ]; then
                 butterknife-discover > /tmp/discovered_servers
@@ -244,7 +244,7 @@ case $TRANSFER_METHOD in
 
         if [ -z $bk_template ]; then
             # Fetch template list
-            curl -A $AGENT -s $bk_url/template/ \
+            curl -A $AGENT -s $bk_url/api/template/ \
                 | jq '.templates[] | .namespace + "." + .identifier + " \"" + .description + "\""' -r \
                 > /tmp/available_templates
 
@@ -260,7 +260,7 @@ case $TRANSFER_METHOD in
         ###############################
         if [ -z $bk_version ]; then
             # Fetch version list
-            curl -A $AGENT -s $bk_url/template/$bk_template/arch/$bk_arch/version/ \
+            curl -A $AGENT -s $bk_url/api/template/$bk_template/arch/$bk_arch/version/ \
                 > /tmp/available_versions.json
 
             cat /tmp/available_versions.json \
@@ -283,7 +283,7 @@ case $TRANSFER_METHOD in
         #####################################
 
         # Build btrfs-stream URL
-        STREAM="$bk_url/template/$bk_template/arch/$bk_arch/version/$bk_version/stream/"
+        STREAM="$bk_url/$bk_template_subvol/"
     ;;
 esac
 
