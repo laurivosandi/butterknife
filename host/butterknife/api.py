@@ -55,7 +55,7 @@ def templatize(path):
             assert not req.get_param("unicode") or req.get_param("unicode") == u"✓", "Unicode sanity check failed"
 
             r = func(instance, req, resp, **kwargs)
-            r.pop("self")
+            r.pop("self", None)
 
             if not resp.body:
                 if  req.get_header("Accept") == "application/json":
