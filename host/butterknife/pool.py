@@ -44,7 +44,7 @@ class LocalPool(object):
 #        if parent_subvol:
 #            cmd += "-p", "/" + str(parent_subvol)
         click.echo("Executing: %s" % " ".join(cmd))
-        return subprocess.Popen(cmd, stdin=fh)
+        return subprocess.Popen(cmd, bufsize=-1, stdin=fh)
 
     def send(self, subvol, parent_subvol=None):
         subvol_path = os.path.join(self.path, str(subvol))
@@ -59,7 +59,7 @@ class LocalPool(object):
         if os.getuid() > 0:
             cmd = ("sudo", "-n") + cmd
         click.echo("Executing2: %s" % " ".join(cmd))
-        return subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        return subprocess.Popen(cmd, bufsize=-1, stdout=subprocess.PIPE)
 
     def tar(self, subvol):
         subvol_path = os.path.join(self.path, str(subvol))
@@ -67,7 +67,7 @@ class LocalPool(object):
         if os.getuid() > 0:
             cmd = ("sudo", "-n") + cmd
         click.echo("Executing: %s" % " ".join(cmd))
-        return subprocess.Popen(cmd, stdout=subprocess.PIPE, cwd=subvol_path)
+        return subprocess.Popen(cmd, bufsize=-1, stdout=subprocess.PIPE, cwd=subvol_path)
 
     def manifest(self, subvol):
         """

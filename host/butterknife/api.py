@@ -138,7 +138,7 @@ class LegacyStreamingResource(PoolResource):
                 if os.path.exists(cmd):
                     resp.set_header('Content-Encoding', 'gzip')
                     print("Compressing with %s" % cmd)
-                    compressor = subprocess.Popen((cmd,), stdin=streamer.stdout, stdout=subprocess.PIPE)
+                    compressor = subprocess.Popen((cmd,), bufsize=-1, stdin=streamer.stdout, stdout=subprocess.PIPE)
                     resp.stream = compressor.stdout
                     break
             else:
@@ -207,13 +207,14 @@ class StreamResource(PoolResource):
                 if os.path.exists(cmd):
                     resp.set_header('Content-Encoding', 'gzip')
                     print("Compressing with %s" % cmd)
-                    compressor = subprocess.Popen((cmd,), stdin=streamer.stdout, stdout=subprocess.PIPE)
+                    compressor = subprocess.Popen((cmd,), bufsize=-1, stdin=streamer.stdout, stdout=subprocess.PIPE)
                     resp.stream = compressor.stdout
-                    break
+                    return
             else:
                 print("No gzip compressors found, falling back to no compression")
         else:
             print("Client did not ask for compression")
+
 
 class ManifestResource(PoolResource):
     """
@@ -253,6 +254,7 @@ class SignatureResource(PoolResource):
             resp.stream = self.pool.signature(subvol)
             suggested_filename = "%s.%s-%s-%s.asc" % (subvol.namespace, subvol.identifier, subvol.architecture, subvol.version)
             resp.set_header('Content-Type', 'text/plain')
+            resp.set_header("Cache-Control", "public")
         except FileNotFoundError:
             resp.body = "Signature for %s not found" % subvol
             resp.status = falcon.HTTP_404
