@@ -146,15 +146,10 @@
     <h2>
 
     How to use it?</h2>
-    
     <p>
     You are reccommended to boot Butterknife provisioning image either
     from PXE or from memory stick.
-    Additionally we've included a code snippet below which can be used
-    to bootstrap machine using LiveCD or even from working system.
     </p>
-
-    
 
     <h2>
     <svg height="48" width="48">
@@ -165,12 +160,12 @@
     
     <p>Download ISO file and write it on a memory stick
     
-    <pre>wget -c https://github.com/laurivosandi/butterknife/raw/master/butterknife-i386.iso
+    <pre>wget -c https://www.koodur.com/butterknife/provisioning-image/butterknife-i386.iso
 sudo dd if=butterknife-i386.iso of=/dev/sdx <span class="comment"># Where sdx corresponds to your USB key</span></pre>
 
     <p>In case you wish to deploy 64-bit templates or running on 64-bit capable hardware use following image instead:</p>
     
-    <pre>wget -c https://github.com/laurivosandi/butterknife/raw/master/butterknife-amd64.iso
+    <pre>wget -c https://www.koodur.com/butterknife/provisioning-image/butterknife-amd64.iso
 sudo dd if=butterknife-amd64.iso of=/dev/sdx</pre>
 
     <p>Windows users may want to give <a href="https://rufus.akeo.ie/">Rufus</a> a try.</p>
@@ -197,9 +192,6 @@ replicate the directory structure from <a href="https://github.com/laurivosandi/
     Note that currently Butterknife supports legacy boot methods only,
     hence make sure you have turned (U)EFI and secure boot off.
 
-
-
-
     <h2>
     <svg height="48" width="48">
         <circle fill="none" stroke-width="3" stroke="black" r="20" cy="24" cx="24"></circle>
@@ -224,50 +216,6 @@ replicate the directory structure from <a href="https://github.com/laurivosandi/
     Active Directory compatible domain or create a local user account.
     Finally post installation scripts reconfigure bootloader
     and if you're lucky enough you're greeted with a shiny Linux OS deployment.</p>
-
-
-
-    <h2>
-    Deploying from generic LiveCD or memory stick</h2>
-    
-    <p>
-    As an alternative or for experimentation you may use following commands on your machine
-    to download a snapshot and set up the bootloader.
-    This assumes you're running the target machine off eg Ubuntu LiveCD or you want to convert your current workstation:</p>
-
-    <pre><span class="comment"># Determine first Btrfs filesystem</span>
-UUID=$(blkid -s UUID -l -t TYPE=btrfs -o value)
-
-<span class="comment"># Create directories</span>
-mkdir -p /mnt/target/ /var/butterknife/pool/
-
-<span class="comment"># Mount subvolumes</span>
-mount UUID=$UUID -o subvol=/ /var/butterknife/pool
-mount UUID=$UUID -o subvol=$SUBVOLUME /mnt/target
-
-<span class="comment"># Download and apply snapshot</span>
-curl <span class="url" style="color:red;">{{ request.uri }}SELECT-SNAPSHOT-BELOW</span> \
- | btrfs receive /var/butterknife/pool
-
-<span class="comment"># Mountpoints for chroot</span>
-mount --bind /sys /mnt/target/sys/
-mount --bind /proc /mnt/target/proc/
-mount --bind /dev /mnt/target/dev/
-mount --bind /dev /mnt/target/dev/pts/
-
-<span class="comment"># Run post-deploy scripts</span>
-chroot /mnt/target/ /usr/bin/butterknife-postdeploy
-
-<span class="comment"># Unmount filesystems</span>
-umount /mnt/target/dev/pts/
-umount /mnt/target/dev/
-umount /mnt/target/proc/
-umount /mnt/target/sys/
-umount /mnt/target/
-umount /var/butterknife/pool/
-
-<span class="comment"># Reboot machine</span>
-reboot</pre>
 
     <h2>Run downstream server</h2>
 
