@@ -234,24 +234,28 @@ def serve(subvol, user, port, listen):
         group = None
     else:
         service_name = "Butterknife server at " + socket.gethostname() + (" port %d" % port if port != 80 else "")
-        print("Advertising via Avahi:", service_name)
         bus = dbus.SystemBus()
-        server = dbus.Interface(
-            bus.get_object("org.freedesktop.Avahi", "/"),
-            "org.freedesktop.Avahi.Server")
-        group = dbus.Interface(
-            bus.get_object('org.freedesktop.Avahi', server.EntryGroupNew()),
-            "org.freedesktop.Avahi.EntryGroup")
-        group.AddService(
-            -1,
-            -1,
-            dbus.UInt32(0),
-            service_name.encode("ascii"),
-            b"_butterknife._tcp",
-            b"local",
-            (socket.gethostname() + ".local").encode("ascii"),
-            dbus.UInt16(port), [b"path=/"])
-        group.Commit()
+        try:
+            server = dbus.Interface(
+                bus.get_object("org.freedesktop.Avahi", "/"),
+                "org.freedesktop.Avahi.Server")
+        except dbus.exceptions.DBusException:
+            click.echo("Avahi not running, skipping advertisement")
+        else:
+            click.echo("Advertising via Avahi: %s" % service_name)
+            group = dbus.Interface(
+                bus.get_object('org.freedesktop.Avahi', server.EntryGroupNew()),
+                "org.freedesktop.Avahi.EntryGroup")
+            group.AddService(
+                -1,
+                -1,
+                dbus.UInt32(0),
+                service_name.encode("ascii"),
+                b"_butterknife._tcp",
+                b"local",
+                (socket.gethostname() + ".local").encode("ascii"),
+                dbus.UInt16(port), [b"path=/"])
+            group.Commit()
 
     httpd.serve_forever()
 
