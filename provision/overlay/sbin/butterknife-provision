@@ -313,8 +313,8 @@ esac
 ####################################################
 
 case $STREAM in
-    https://)
-        STREAM=--compressed $STREAM
+    https://*)
+        STREAM="--compressed $STREAM"
     ;;
 esac
 
