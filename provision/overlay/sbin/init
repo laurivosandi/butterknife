@@ -36,7 +36,7 @@ else
 fi
 
 while [ 1 ]; do
-    action=$(dialog --menu "What do you want to do" 0 0 0 \
+    action=$(dialog --no-cancel --menu "What do you want to do" 0 0 0 \
         provision       "Provision this machine" \
         advanced        "Advanced options" \
         reboot          "Reboot" \
@@ -54,11 +54,10 @@ while [ 1 ]; do
         provision)
             butterknife-provision
             read -p "Press Enter to continue..."
+
         ;;
         advanced)
             butterknife-advanced-options
         ;;
     esac
-
-    umount /var/butterknife/pool
 done

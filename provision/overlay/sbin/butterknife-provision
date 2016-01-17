@@ -8,7 +8,7 @@
 # TODO: Make sure fdisk from busybox is NOT used, it's counting sectors incorrectly (?!)
 # TODO: Check connectivity with API server
 
-POOL_MOUNTPOINT=/var/butterknife/pool
+POOL_MOUNTPOINT=/var/lib/butterknife/pool
 TARGET_MOUNTPOINT=/mnt/target
 
 AGENT="Butterknife-Provisioning-Image/0.1"
@@ -274,8 +274,7 @@ case $TRANSFER_METHOD in
         if [ -z $PARENT ]; then
             echo "Could not determine parent, falling back to full snapshot"
         else
-            STREAM="$STREAM?parent=$PARENT"
-            PARENT_ARG="-p $POOL_MOUNTPOINT/@template:$bk_template:$bk_arch:$PARENT"
+            STREAM="$STREAM?parent=@template:$bk_template:$bk_arch:$PARENT"
         fi
         echo "Final URL is $STREAM"
     ;;
@@ -299,7 +298,7 @@ esac
 case $TRANSFER_METHOD in
     multicast)
         ls $POOL_MOUNTPOINT | (grep "^@template:" || true) > /tmp/local_templates
-        udp-receiver --nokbd | btrfs receive $POOL_MOUNTPOINT $PARENT_ARG
+        udp-receiver --nokbd | btrfs receive $POOL_MOUNTPOINT
         # Heuristics to determine name of received snapshot
         ls $POOL_MOUNTPOINT | (grep "^@template:" || true) > /tmp/new_templates
         bk_template_subvol=$(cat /tmp/local_templates /tmp/new_templates | sort | uniq -u)
@@ -309,12 +308,12 @@ case $TRANSFER_METHOD in
         bk_version=$(echo $bk_template_subvol | cut -d ":" -f 4)
     ;;
     http)
-        curl -A $AGENT $STREAM | btrfs receive $POOL_MOUNTPOINT $PARENT_ARG
+        curl -A $AGENT $STREAM | btrfs receive $POOL_MOUNTPOINT
     ;;
     tee)
         dialog --msgbox "Press enter once all the other machines are ready to receive" 0 0
         mkfifo /tmp/multicast_stream /tmp/local_stream
-        cat /tmp/local_stream | btrfs receive $POOL_MOUNTPOINT $PARENT_ARG &
+        cat /tmp/local_stream | btrfs receive $POOL_MOUNTPOINT &
         sleep 1
         udp-sender --nokbd --no-progress --min-receivers 1 --min-wait 5 /tmp/multicast_stream &
         sleep 1
@@ -364,6 +363,7 @@ case $PARTITIONING_METHOD in
         mount --bind /dev/ $TARGET_MOUNTPOINT/dev/
         mount --bind /sys/ $TARGET_MOUNTPOINT/sys/
         mount --bind /proc/ $TARGET_MOUNTPOINT/proc/
+        mount --bind /run/ $TARGET_MOUNTPOINT/run/
         mount none $TARGET_MOUNTPOINT/tmp/ -t tmpfs
 
         # Export variables for postinstall scripts
@@ -378,13 +378,14 @@ case $PARTITIONING_METHOD in
         export BUTTERKNIFE_POOL_UUID=$(blkid -s UUID -o value $PARTITION)
 
         # Copy DNS config
+        mkdir -p /run/resolvconf
         cat /etc/resolv.conf > $TARGET_MOUNTPOINT/etc/resolv.conf
 
         # Export sensible PATH
         export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
         # Run postinstall scripts, presumably in sorted order
-        if [ -e $TARGET_MOUNTPOINT/usr/local/bin/butterknife-postdeploy ];
+        if [ -e $TARGET_MOUNTPOINT/usr/local/bin/butterknife-postdeploy ]; then
             chroot $TARGET_MOUNTPOINT butterknife-postdeploy
         else
             chroot $TARGET_MOUNTPOINT butterknife-deploy

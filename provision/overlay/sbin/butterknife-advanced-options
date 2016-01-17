@@ -43,23 +43,18 @@ case $action in
         mount --bind /dev $instance_mountpoint/dev
         mount --bind /sys $instance_mountpoint/sys
         mount --bind /proc $instance_mountpoint/proc
-        if [ -d $instance_mountpoint/var/butterknife/persistent ]; then
-            mount --bind /proc $instance_mountpoint/var/butterknife/persistent
+        if [ -d $instance_mountpoint/var/lib/butterknife/persistent ]; then
+            mount --bind /proc $instance_mountpoint/var/lib/butterknife/persistent
         fi
         clear
         echo "Mounted $BUTTERKNIFE_PARTITION$BUTTERKNIFE_DEPLOY_SUBVOL at $instance_mountpoint"
         echo "Chrooting into $instance_mountpoint"
         hostname $(cat $instance_mountpoint/etc/hostname)
         cat /etc/resolv.conf > $instance_mountpoint/etc/resolv.conf
-        chroot $instance_mountpoint
-        umount $instance_mountpoint/dev
-        umount $instance_mountpoint/sys
-        umount $instance_mountpoint/proc
-        if [ -d $instance_mountpoint/var/butterknife/persistent ]; then
-            umount $instance_mountpoint/var/butterknife/persistent
-        fi
-        echo "Unmounting $instance_mountpoint"
-        umount $instance_mountpoint
+        # Export sensible PATH
+        export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        chroot $instance_mountpoint butterknife-maintenance
+        umount -a
         rmdir $instance_mountpoint
     ;;
     subvol)
