@@ -78,7 +78,7 @@ case $action in
         rmdir $mountpoint
     ;;
     restore)
-        export disk=$(butterknife-select-disk 2>&1 >$(tty))
+        disk=$(butterknife-select-disk 2>&1 >$(tty))
 
         # Select MBR type
         action=$(dialog --menu "What kind of master boot record would you like to restore? You might have to mark partition bootable using fdisk." 0 0 0 \
@@ -86,9 +86,10 @@ case $action in
             mbrvista      "Windows Vista" \
             mbr           "Windows 2000/XP/2003" \
             2>&1 >$(tty))
-        clear
-        ms-sys --$action $disk
-        sleep 1
+
+        cmd="ms-sys --$action /dev/$disk"
+        $cmd | dialog --programbox "$cmd" 10 76
+
     ;;
 esac
 

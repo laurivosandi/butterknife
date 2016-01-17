@@ -60,34 +60,7 @@ case $TRANSFER_METHOD in
         ### Target disk selection ###
         #############################
 
-        if [ -z "$(ls /sys/class/block/)" ]; then
-            dialog --msgbox "Butterknife was unable to detect any harddisks,\
-                are you sure harddisk is connected and we have drivers for it?" 0 0
-            exit 255
-        fi
-
-        for disk in /sys/class/block/*; do
-            if [ -d $disk/device ]; then
-                slug=$(basename $disk)
-                sector_count=$(cat $disk/size)
-                sector_size=$(cat $disk/queue/hw_sector_size)
-                # Hack around these dumbass cardreaders
-
-                if [ "$sector_count" == "0" ]; then
-                    continue
-                fi
-                size=$(expr $sector_count / 1000000 \* $sector_size / 1000 || true)G
-
-                echo "$slug \"$(cat $disk/device/model | xargs) ($size)\"";
-            fi
-        done > /tmp/disks
-
-        dialog \
-            --menu "Target disk" 0 0 0 \
-            --file /tmp/disks \
-            2> /tmp/selected_disk
-
-        DISK_SLUG=$(cat /tmp/selected_disk)
+        DISK_SLUG=$(butterknife-select-disk 2>&1 >$(tty))
         DISK=/dev/$DISK_SLUG
 
         PARTITIONING_METHOD=$(dialog --menu "Partitioning $DISK" 0 0 0 \
@@ -411,20 +384,19 @@ case $PARTITIONING_METHOD in
         export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
         # Run postinstall scripts, presumably in sorted order
-        chroot $TARGET_MOUNTPOINT butterknife-postdeploy
+        if [ -e $TARGET_MOUNTPOINT/usr/local/bin/butterknife-postdeploy ];
+            chroot $TARGET_MOUNTPOINT butterknife-postdeploy
+        else
+            chroot $TARGET_MOUNTPOINT butterknife-deploy
+            chroot $TARGET_MOUNTPOINT butterknife-maintenance
+        fi
 
         # Be forgiving from now on
         set +e
 
         # Unmount directories
-        umount $TARGET_MOUNTPOINT$POOL_MOUNTPOINT
-        umount $TARGET_MOUNTPOINT/dev
-        umount $TARGET_MOUNTPOINT/sys
-        umount $TARGET_MOUNTPOINT/proc
-        umount $TARGET_MOUNTPOINT/tmp
-        umount $TARGET_MOUNTPOINT
-        umount $POOL_MOUNTPOINT
-
+        echo "Unmounting filesystems"
+        umount -a
         echo "Flushing buffers"
         sync
         sleep 1
