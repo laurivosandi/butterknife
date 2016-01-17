@@ -299,8 +299,8 @@ def lxc_release(name):
     ROOTFS = container.get_config_item("lxc.rootfs")
     assert os.path.isdir(ROOTFS), "No directory at %s" % ROOTFS
 
-    POSTDEPLOY_SCRIPTS = os.path.join(ROOTFS, "etc", "butterknife", "postdeploy.d")
-    assert os.path.isdir(POSTDEPLOY_SCRIPTS), "Postinstall scripts directory %s missing!" % POSTDEPLOY_SCRIPTS
+    DEPLOY_SCRIPTS = os.path.join(ROOTFS, "etc", "butterknife", "deploy.d")
+    assert os.path.isdir(DEPLOY_SCRIPTS), "Postinstall scripts directory %s missing!" % DEPLOY_SCRIPTS
 
     config.read(os.path.join(ROOTFS, "etc/butterknife/butterknife.conf"))
     if "template" not in config.sections():
@@ -321,7 +321,7 @@ def lxc_release(name):
 
     snapdir = os.path.join("/var/lib/lxcsnaps", name, snapshot)
 
-    cmd = "chroot", os.path.join(snapdir, "rootfs"), "/usr/local/bin/butterknife-prerelease"
+    cmd = "chroot", os.path.join(snapdir, "rootfs"), "/usr/local/bin/butterknife-prepare"
 
     print("Executing:", " ".join(cmd))
 
@@ -382,8 +382,8 @@ def nspawn_release(name):
     ROOTFS = os.path.join("/var/lib/machines", name)
     assert os.path.isdir(ROOTFS), "No directory at %s" % ROOTFS
 
-    POSTDEPLOY_SCRIPTS = os.path.join(ROOTFS, "etc", "butterknife", "postdeploy.d")
-    assert os.path.isdir(POSTDEPLOY_SCRIPTS), "Postinstall scripts directory %s missing!" % POSTDEPLOY_SCRIPTS
+    DEPLOY_SCRIPTS = os.path.join(ROOTFS, "etc", "butterknife", "deploy.d")
+    assert os.path.isdir(DEPLOY_SCRIPTS), "Postinstall scripts directory %s missing!" % DEPLOY_SCRIPTS
 
     config.read(os.path.join(ROOTFS, "etc/butterknife/butterknife.conf"))
     if "template" not in config.sections():
@@ -408,7 +408,7 @@ def nspawn_release(name):
 
     config.set("template", "version", snapshot)
 
-    cmd = "chroot", ROOTFS, "/usr/local/bin/butterknife-prerelease"
+    cmd = "chroot", ROOTFS, "/usr/local/bin/butterknife-prepare"
 
     print("Executing:", " ".join(cmd))
 
