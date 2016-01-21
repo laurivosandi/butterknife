@@ -28,6 +28,7 @@ In menuconfig enable following:
         Root filesystem overlay directories (path/to/butterknife/buildroot/overlay)
     Toolchain  --->
         [*] Enable WCHAR support
+        [*] Enable C++ support
     Kernel  --->
         [*] Linux Kernel
             Kernel Version (Same as toolchain headers)
@@ -75,6 +76,10 @@ In menuconfig enable following:
             [*]   ntfsprogs
         Hardware handling  --->
             [*] pciutils
+            [*] gptfdisk
+            [ ]   interactive gdisk
+            [*]   command line sgdisk
+
 
 Additionally you might want to tweak kernel or busybox:
 

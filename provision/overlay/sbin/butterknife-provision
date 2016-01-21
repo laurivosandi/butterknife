@@ -68,7 +68,8 @@ case $TRANSFER_METHOD in
             unpartitioned   "Use unpartitioned area" \
             resize          "Resize last partition" \
             reformat        "Reformat partition" \
-            purge           "Overwrite whole disk" \
+            mbr             "Wipe <2TB disk" \
+            gpt             "Wipe 2TB+ disk" \
             2>&1 >$(tty))
 
         # TODO: deploy          "Deploy received template" \
@@ -94,10 +95,16 @@ case $TRANSFER_METHOD in
                 echo -e "n\np\n\n\n+$SIZE\nt\n\n7\nw" | fdisk $DISK # Re-create NTFS
                 echo -e "n\np\n\n\n\nw" | fdisk $DISK # Create partition for btrfs
             ;;
-            purge)
+            mbr)
                 clear
                 echo "Purging whole disk"
                 echo -e "o\nn\np\n\n\n\na\n1\nw" | fdisk $DISK
+            ;;
+            gpt)
+                clear
+                sgdisk $DISK -o -g \
+                    -n 1::+2MB -t 1:ef02 -c 1:"BIOS Boot Partition" \
+                    -n 2       -t 2:8300 -c 2:"Butterknife pool" -p
             ;;
             reformat|receive)
                 # NOOP
@@ -131,7 +138,7 @@ case $TRANSFER_METHOD in
                     --file /tmp/partitions \
                     2>&1 >$(tty))
             ;;
-            unpartitioned|resize|purge)
+            unpartitioned|resize|mbr|gpt)
                 # Assume last partition
                 PARTITION=$(ls $DISK? | tail -n 1)
             ;;
@@ -148,7 +155,7 @@ case $TRANSFER_METHOD in
         ### Target filesystem creation phase ###
         ########################################
         case $PARTITIONING_METHOD in
-            purge|reformat|unpartitioned|resize) 
+            mbr|gpt|reformat|unpartitioned|resize)
                 clear
                 echo "Creating clean btrfs filesystem on $PARTITON"
                 mkfs.btrfs -f $PARTITION
@@ -373,7 +380,7 @@ case $PARTITIONING_METHOD in
         export BUTTERKNIFE_PARTITION=$PARTITION
         export BUTTERKNIFE_DISK=$DISK
         export BUTTERKNIFE_POOL_MOUNTPOINT=$POOL_MOUNTPOINT
-        export BUTTERKNIFE_PARTITIONING_METHOD=$PARTITIONING_METHOD # One of purge,reformat,unpartitionied,resize,receive
+        export BUTTERKNIFE_PARTITIONING_METHOD=$PARTITIONING_METHOD # One of mbr,gpt,reformat,unpartitionied,resize,receive
         export BUTTERKNIFE_TRANSFER_METHOD=$TRANSFER_METHOD # One of multicast,http,tee
         export BUTTERKNIFE_POOL_UUID=$(blkid -s UUID -o value $PARTITION)
 
