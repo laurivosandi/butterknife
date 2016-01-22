@@ -392,12 +392,8 @@ case $PARTITIONING_METHOD in
         export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
         # Run postinstall scripts, presumably in sorted order
-        if [ -e $TARGET_MOUNTPOINT/usr/local/bin/butterknife-postdeploy ]; then
-            chroot $TARGET_MOUNTPOINT butterknife-postdeploy
-        else
-            chroot $TARGET_MOUNTPOINT butterknife-deploy
-            chroot $TARGET_MOUNTPOINT butterknife-maintenance
-        fi
+        chroot $TARGET_MOUNTPOINT butterknife-deploy
+        chroot $TARGET_MOUNTPOINT butterknife-maintenance
 
         # Be forgiving from now on
         set +e
