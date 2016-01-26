@@ -29,7 +29,7 @@ Install Butterknife:
 Listing templates
 -----------------
 
-List local templates at /var/butterknife/pool:
+List local templates at /var/lib/butterknife/pool:
 
 .. code:: bash
 
@@ -41,7 +41,7 @@ List local templates in a particular directory:
 
     butterknife list file:///path/to/directory
     
-List templates at /var/butterknife/pool on a remote machine via SSH:
+List templates at /var/lib/butterknife/pool on a remote machine via SSH:
 
 .. code:: bash
 
@@ -58,8 +58,8 @@ Pushing/pulling templates
 -------------------------
 
 Currently pull over SSH is working. Following replicates
-/var/butterknife/pool from machine *hostname* to local pool
-at /var/butterknife/pool:
+/var/lib/butterknife/pool from machine *hostname* to local pool
+at /var/lib/butterknife/pool:
 
 .. code:: bash
 
@@ -89,7 +89,7 @@ You can even multicast a remote subvolume:
 
     butterknife multicast send @template\:com.koodur.butterknife.Ubuntu\:x86_64\:snap7 --pool ssh://hostname
 
-Receiving to local pool at /var/butterknife/pool:
+Receiving to local pool at /var/lib/butterknife/pool:
 
 .. code:: bash
 

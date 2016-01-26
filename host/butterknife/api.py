@@ -307,7 +307,7 @@ class PackageDiff(PoolResource):
                     continue
             return versions
 
-        new = dpkg_list("/var/butterknife/pool/%s" % subvol)
+        new = dpkg_list("/var/lib/butterknife/pool/%s" % subvol)
 
         if not parent_subvol:
             packages_diff = False
@@ -319,7 +319,7 @@ class PackageDiff(PoolResource):
                 resp.status = falcon.HTTP_403
                 return
 
-            old = dpkg_list("/var/butterknife/pool/%s" % parent_subvol)
+            old = dpkg_list("/var/lib/butterknife/pool/%s" % parent_subvol)
 
             packages_added = []
             packages_removed = []

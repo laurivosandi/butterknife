@@ -218,7 +218,7 @@ def serve(subvol, user, port, listen):
             print("Please specify unprivileged user, eg 'butterknife'")
             exit(254)
         elif not os.path.exists(sudoer):
-            print("Please create %s with following content: %s ALL=(ALL) NOPASSWD: /usr/bin/btrfs send /var/butterknife/pool/@template\\:*" % (sudoer, user))
+            print("Please create %s with following content: %s ALL=(ALL) NOPASSWD: /usr/bin/btrfs send /var/lib/butterknife/pool/@template\\:*" % (sudoer, user))
             exit(253)
 
         print("Switching to user %s (uid=%d, gid=%d)" % (user, uid, gid))
@@ -263,7 +263,7 @@ def serve(subvol, user, port, listen):
         group.Free()
 
 @click.command("receive", help="Receive subvolume over multicast")
-@click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
+@click.option("--pool", default="file:///var/lib/butterknife/pool", help="Remote or local pool")
 def multicast_receive(pool):
     cmd = "udp-receiver", "--nokbd"
     udpcast = subprocess.Popen(cmd, stdout=subprocess.PIPE)
@@ -273,7 +273,7 @@ def multicast_receive(pool):
 
 @click.command("send", help="Send subvolume over multicast")
 @click.argument("subvol")
-@click.option("--pool", default="file:///var/butterknife/pool", help="Remote or local pool")
+@click.option("--pool", default="file:///var/lib/butterknife/pool", help="Remote or local pool")
 @click.option("-m", "--min-wait", default=5, help="Wait until t seconds since first receiver connection has passed")
 def multicast_send(subvol, pool, min_wait):
     pool = pool_factory(pool)
@@ -332,7 +332,7 @@ def lxc_release(name):
         config.write(fh)
 
     cmd = "btrfs", "subvolume", "snapshot", "-r", os.path.join(snapdir, "rootfs"), \
-        "/var/butterknife/pool/@template:%(namespace)s.%(name)s:%(architecture)s:%(version)s" % config["template"]
+        "/var/lib/butterknife/pool/@template:%(namespace)s.%(name)s:%(architecture)s:%(version)s" % config["template"]
 
     print("Executing:", " ".join(cmd))
     subprocess.call(cmd)
@@ -359,15 +359,15 @@ def lxc_list():
 
 @click.command("clean", help="Clean incomplete transfers")
 def pool_clean():
-    for path in os.listdir("/var/butterknife/pool"):
+    for path in os.listdir("/var/lib/butterknife/pool"):
         if not path.startswith("@template:"):
             continue
         try:
-            open(os.path.join("/var/butterknife/pool", path, ".test"), "w")
+            open(os.path.join("/var/lib/butterknife/pool", path, ".test"), "w")
         except OSError as e:
             if e.errno == 30: # This is read-only, hence finished
                 continue
-        cmd = "btrfs", "subvol", "delete", os.path.join("/var/butterknife/pool", path)
+        cmd = "btrfs", "subvol", "delete", os.path.join("/var/lib/butterknife/pool", path)
         click.echo("Executing: %s" % " ".join(cmd))
         subprocess.check_output(cmd)
 
@@ -418,7 +418,7 @@ def nspawn_release(name):
         config.write(fh)
 
     cmd = "btrfs", "subvolume", "snapshot", "-r", ROOTFS, \
-        "/var/butterknife/pool/@template:%(namespace)s.%(name)s:%(architecture)s:%(version)s" % config["template"]
+        "/var/lib/butterknife/pool/@template:%(namespace)s.%(name)s:%(architecture)s:%(version)s" % config["template"]
 
     print("Executing:", " ".join(cmd))
     subprocess.call(cmd)
@@ -520,7 +520,7 @@ def verify(subvol, manifest):
     if subvol.endswith("/"):
         subvol = subvol[:-1]
     if not subvol.startswith("/"):
-        subvol = os.path.join("/var/butterknife/pool", subvol)
+        subvol = os.path.join("/var/lib/butterknife/pool", subvol)
 
     verify_manifest(subvol) # This will raise exceptions
     click.echo("Verification successful")

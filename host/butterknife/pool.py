@@ -11,7 +11,7 @@ BTRFS = "/sbin/btrfs"
 MANIFEST_DIR = "/var/lib/butterknife/manifests"
 
 class LocalPool(object):
-    DEFAULT_PATH = "/var/butterknife/pool"
+    DEFAULT_PATH = "/var/lib/butterknife/pool"
 
     def __init__(self, path=DEFAULT_PATH):
         self.path = os.path.abspath(path) if path else ''
@@ -41,8 +41,6 @@ class LocalPool(object):
         # TODO: Fetch manifest
         # TODO: Verify manifest
         cmd = BTRFS, "receive", os.path.join(self.path), "-C"
-#        if parent_subvol:
-#            cmd += "-p", "/" + str(parent_subvol)
         click.echo("Executing: %s" % " ".join(cmd))
         return subprocess.Popen(cmd, bufsize=-1, stdin=fh)
 

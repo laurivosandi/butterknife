@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 
 def determine_rootfs_subvol():
@@ -18,10 +19,9 @@ class Subvol(object):
             raise Exception("Invalid subvolume base name, contains /")
         self.category, fqn, self.architecture, self.version = subvol.split(":")
         self.namespace, self.identifier = fqn.rsplit(".", 1)
-        assert self.version.startswith("snap")
-        self.numeric_version = int(self.version[4:])
+        self.numeric_version = int(self.version[4:]) if self.version.startswith("snap") else int(self.version)
         self.signed = signed
-        self.created = created
+        self.created = created if self.version.startswith("snap") else datetime.strptime(self.version, "%Y%m%d%H%M%S")
 
     @property
     def domain(self):

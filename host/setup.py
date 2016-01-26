@@ -3,8 +3,6 @@
 import os
 from setuptools import setup
 
-# mkdir -p /var/butterknife/pool
-
 setup(
     name = "butterknife",
     version = "0.1.16",

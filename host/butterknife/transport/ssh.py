@@ -9,7 +9,7 @@ class SecureShellPool(LocalPool):
         self.hostname = hostname
         self.port = port 
         self.user = user
-        self.path = path or "/var/butterknife/pool/"
+        self.path = path or "/var/lib/butterknife/pool/"
                 
     def __str__(self):
         url = "ssh://"
@@ -18,7 +18,7 @@ class SecureShellPool(LocalPool):
         url += self.hostname
         if self.port:
             url += ":%d" % self.port
-        if self.path != "/var/butterknife/pool/":
+        if self.path != "/var/lib/butterknife/pool/":
             url += self.path
         return url
         
