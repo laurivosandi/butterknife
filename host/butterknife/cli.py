@@ -193,6 +193,10 @@ def serve(subvol, user, port, listen):
     from wsgiref.simple_server import make_server, WSGIServer
     from socketserver import ThreadingMixIn
 
+    class DenyCrawlers(object):
+        def on_get(self, req, resp):
+            resp.body = "User-agent: *\nDisallow: /\n"
+
     class ThreadingWSGIServer(ThreadingMixIn, WSGIServer): 
         pass
     print("Listening on %s:%d" % (listen, port))
@@ -209,6 +213,7 @@ def serve(subvol, user, port, listen):
     app.add_route("/@{subvol}/signature/", SignatureResource(pool, subvol_filter))
     app.add_route("/@{subvol}/packages/", PackageDiff(pool, subvol_filter))
     app.add_route("/keyring.gpg", KeyringResource(BUTTERKNIFE_PUBRING))
+    app.add_route("/robots.txt", DenyCrawlers())
 
     httpd = make_server(listen, port, app, ThreadingWSGIServer)
     if user:
