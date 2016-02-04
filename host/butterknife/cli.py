@@ -292,7 +292,9 @@ def lxc_release(name):
 
     import lxc
     container=lxc.Container(name)
-    if container.running:
+    was_running = container.running
+
+    if was_running:
         print("Stopping container")
         container.stop()
 
@@ -337,7 +339,11 @@ def lxc_release(name):
 
     print("Executing:", " ".join(cmd))
     subprocess.call(cmd)
-    
+
+    if was_running:
+        print("Restarting container")
+        container.start()
+
 @click.command("list", help="Linux Containers that have been prepared for Butterknife")
 def lxc_list():
     import lxc
