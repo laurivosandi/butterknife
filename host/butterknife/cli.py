@@ -11,6 +11,7 @@ import urllib.request
 from butterknife.pool import LocalPool
 from butterknife.subvol import Subvol, determine_rootfs_subvol
 from butterknife.verify import verify_manifest
+from datetime import datetime
 from urllib.parse import urlparse
 
 FQDN = socket.getaddrinfo(socket.gethostname(), 0, flags=socket.AI_CANONNAME)[0][3]
@@ -315,7 +316,7 @@ def lxc_release(name):
 
     snapshot = container.snapshot()
 
-    config.set("template", "version", snapshot)
+    config.set("template", "version", datetime.now().strftime("%Y%m%d%H%M%S"))
 
     print("Created snapshot:", snapshot)
 
