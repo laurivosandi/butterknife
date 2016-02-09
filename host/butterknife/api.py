@@ -138,7 +138,7 @@ class LegacyStreamingResource(PoolResource):
                 if os.path.exists(cmd):
                     resp.set_header('Content-Encoding', 'gzip')
                     print("Compressing with %s" % cmd)
-                    compressor = subprocess.Popen((cmd,), bufsize=-1, stdin=streamer.stdout, stdout=subprocess.PIPE)
+                    compressor = subprocess.Popen((cmd,"--fast"), bufsize=-1, stdin=streamer.stdout, stdout=subprocess.PIPE)
                     resp.stream = compressor.stdout
                     break
             else:
@@ -207,7 +207,7 @@ class StreamResource(PoolResource):
                 if os.path.exists(cmd):
                     resp.set_header('Content-Encoding', 'gzip')
                     print("Compressing with %s" % cmd)
-                    compressor = subprocess.Popen((cmd,), bufsize=-1, stdin=streamer.stdout, stdout=subprocess.PIPE)
+                    compressor = subprocess.Popen((cmd,"--fast"), bufsize=-1, stdin=streamer.stdout, stdout=subprocess.PIPE)
                     resp.stream = compressor.stdout
                     return
             else:
