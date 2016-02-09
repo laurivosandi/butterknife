@@ -1,95 +1,85 @@
 Butterknife provisioning suite
 ==============================
 
-Butterknife makes bare-metal Linux deployment dead-simple using the Btrfs
-filesystem and containers.
+Butterknife is the last missing piece of the puzzle that makes
+Linux-based desktop OS deployment a breeze. Butterknife complements your
+Puppet or Salt infrastructure and reduces the time you spend
+setting up Linux-based desktop machines.
 
 .. figure:: doc/img/butterknife-usecase-tee.png
 
     Butterknife with off-site server and multicast
 
-Detailed background of the work is described in
-Master Thesis
-`Efficient and Reliable Filesystem Snapshot Distribution
+For demo and details check out project homepage at `butterknife.rocks <http://butterknife.rocks/>`_.
+Detailed background of the work is described in the
+`white paper
 <https://owncloud.koodur.com/index.php/s/5KOgVze9X2cOUkD>`_.
 You can check out production instance of Butterknife server at
 `butterknife.koodur.com <https://butterknife.koodur.com/>`_.
- 
-General workflow
-----------------
-
-1. Prepare template of your customized OS in a LXC container
-2. Boot provisioning image and deploy the template on bare metal
-3. Enjoy using your favourite Linux-based OS :)
 
 
 Features
 --------
 
-* Minified provisioning image (<15MB) which can be booted either over PXE or from USB key.
-* Deploy customized Linux-based OS over HTTP in 5 minutes.
-* Deploy hundreds of machines simultanously within same timeframe over multicast.
-* Perform incremental upgrades using Btrfs.
-* Persistent Btrfs subvolumes for home folders, Puppet keys etc.
+We basically mixed Linux Containers with Btrfs filesystem and that resulted in pure awesomeness:
+
+* Based on Btrfs snapshots technology, supports incremental upgrades
+* Works with Puppet, Salt or any other configuration management software
+* Persistent subvolume for /home, remote management keys and domain membership
+* Supports multicast for blasting template on multiple machines simultaneously
+* Avahi advertisement over mDNS, no need to configure DNS/DHCP server
+* Written mostly in Python, provisioning image built with Buildroot
+
 
 Installation
 ------------
 
-Current instructions are based on Ubuntu 14.04, but any modern Linux-based
+Current instructions are based on Debian 8, but any modern Linux-based
 OS should suffice.
-First set up machine with Ubuntu 14.04 LTS on top of Btrfs filesystem to
+First set up machine with Debian 8 on top of Btrfs filesystem to
 be used as snapshot server.
 
-Before doing any filesystem magic ensure that you're running 3.16+ kernel.
-You can install up to date kernel on 14.04 simply by doing following:
+Before doing any filesystem magic ensure that you're running 4.3.3+ kernel.
+You can install up to date kernel on Debian 8 and Ubunut 14.04 simply by doing following:
 
 .. code:: bash
 
-    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.22-vivid/linux-headers-3.18.22-031822-generic_3.18.22-031822.201510031227_amd64.deb
-    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.22-vivid/linux-headers-3.18.22-031822_3.18.22-031822.201510031227_all.deb
-    wget -c http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.18.22-vivid/linux-image-3.18.22-031822-generic_3.18.22-031822.201510031227_amd64.deb
-    sudo dpkg -i \
-        linux-headers-3.18.22-031822-generic_3.18.22-031822.201510031227_amd64.deb \
-        linux-headers-3.18.22-031822_3.18.22-031822.201510031227_all.deb \
-        linux-image-3.18.22-031822-generic_3.18.22-031822.201510031227_amd64.deb
+    wget -c \
+        http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.4.1-wily/linux-image-4.4.1-040401-generic_4.4.1-040401.201601311534_amd64.deb \
+        http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.4.1-wily/linux-headers-4.4.1-040401-generic_4.4.1-040401.201601311534_amd64.deb \
+        http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.4.1-wily/linux-headers-4.4.1-040401_4.4.1-040401.201601311534_all.deb
+    dpkg -i \
+        linux-image-4.4.1-040401-generic_4.4.1-040401.201601311534_amd64.deb \
+        linux-headers-4.4.1-040401-generic_4.4.1-040401.201601311534_amd64.deb \
+        linux-headers-4.4.1-040401_4.4.1-040401.201601311534_all.deb
 
-You also need updated btrfs-tools:
+On Ubuntu 14.04 you also need to install updated btrfs-tools:
 
 .. code:: bash
 
     wget -c http://launchpadlibrarian.net/190998686/btrfs-tools_3.17-1.1_amd64.deb
     dpkg -i btrfs-tools_3.17-1.1_amd64.deb
-    
-Make sure the root subvolume stays mounted at /var/butterknife/pool,
-with a corresponding entry in /etc/fstab:
 
-.. code::
-
-    UUID=01234567-0123-0123-0123-0123456789ab /var/butterknife/pool btrfs defaults,subvol=/,noatime,nodiratime 0 2
-
-Note that UUID in this case is the unique identifier of the Btrfs filesystem
-which can be determined with **blkid** utility.
 Make sure the LXC container directories are also mounted with *noatime*
 and *nodiratime* flag otherwise all the access times reflect in differential
 updates as well causing excessive traffic.
-Make sure the LXC container and snapshot directories
-reside in the same Btrfs filesystem as 
-/var/butterknife/pool.
+Finally install the `Butterknife command-line utility <host/>`_:
 
-Finally install the Butterknife command-line utility
-as described `here <host/>`_.
+.. code:: bash
+
+    pip3 install butterknife
 
 
 Publishing workflow
 -------------------
 
-Create LXC container to be used as template for deployment, for instance to 
+Create LXC container to be used as template for deployment, for instance to
 set up Ubuntu 14.04 based template use:
 
 .. code:: bash
 
-    lxc-create -n your-template -B btrfs -t ubuntu -- -r trusty -a i386
-    
+    lxc-create -n your-template -B btrfs -t ubuntu -- -r trusty -a amd64
+
 Customize mountpoints in /var/lib/lxc/your-template/fstab, for example:
 
 .. code::
@@ -121,7 +111,7 @@ Copy post-deploy, pre-release scripts and other helpers:
     rsync -av \
         path/to/butterknife/template/overlay/ \
         /var/lib/lxc/your-template/rootfs/
-        
+
 Create Butterknife configuration for the template in
 /var/lib/lxc/your-template/rootfs/etc/butterknife/butterknife.conf:
 
@@ -130,7 +120,7 @@ Create Butterknife configuration for the template in
     [template]
     name=YourTemplateName
 
-Also create Butterknife configuration for the host in 
+Also create Butterknife configuration for the host in
 /etc/butterknife/butterknife.conf:
 
 .. code:: ini
@@ -138,14 +128,14 @@ Also create Butterknife configuration for the host in
     [global]
     namespace=org.example.butterknife
     endpoint=https://butterknife.example.org
-    
+
 This results template snapshot names with following scheme:
 
 .. code::
 
-    @template:org.example.butterknife.YourTemplateName:x86:snap42
-    @template:org.example.butterknife.YourTemplateName:x86:snap43
-    @template:org.example.butterknife.YourTemplateName:x86:snap44
+    @template:org.example.butterknife.YourTemplateName:x86:20160102030405
+    @template:org.example.butterknife.YourTemplateName:x86:20160102030415
+    @template:org.example.butterknife.YourTemplateName:x86:20160102030425
     etc ...
 
 Use butterknife to take a snapshot of the LXC container:
@@ -153,8 +143,8 @@ Use butterknife to take a snapshot of the LXC container:
 .. code:: bash
 
     butterknife lxc release your-template
-    
-Finally fire up the HTTP API:
+
+Finally fire up the Butterknife server:
 
 .. code:: bash
 
@@ -169,17 +159,21 @@ In this case Ubuntu/Debian is used to host the provisioning images.
 
 .. code:: bash
 
-    sudo apt-get install pxelinux tftpd-hpa memtest86+
-    mkdir -p /var/lib/tftpboot/butterknife/
-    cp /boot/memtest86+.bin /var/lib/tftpboot/butterknife/
-    cp /usr/lib/syslinux/pxelinux.0 /var/lib/tftpboot/butterknife/
-    cp /usr/lib/syslinux/*.c32 /var/lib/tftpboot/butterknife/
-    wget https://github.com/laurivosandi/butterknife/raw/master/pxe/butterknife-i386 \
-        -O /var/lib/tftpboot/butterknife/butterknife-i386
-    wget https://github.com/laurivosandi/butterknife/raw/master/pxe/butterknife-amd64 \
-        -O /var/lib/tftpboot/butterknife/butterknife-amd64
+    sudo apt-get install syslinux tftpd-hpa memtest86+
+    mkdir -p /var/lib/tftpboot/
+    cp /boot/memtest86+.bin /var/lib/tftpboot/
+    cp /usr/lib/syslinux/pxelinux.0 /var/lib/tftpboot/
+    cp /usr/lib/syslinux/*.c32 /var/lib/tftpboot/
+    wget http://butterknife.rocks/provision/butterknife-amd64.bin \
+        -O /var/lib/tftpboot/butterknife-amd64.bin
 
-Set up following in /var/lib/tftpboot/butterknife/pxelinux.cfg/default:
+In Ubuntu ``tftp-hpa`` listens only on IPv6 addresses, this can be fixed with:
+
+.. code:: bash
+
+    sed -i -e 's/TFTP_ADDRESS=/TFTP_ADDRESS=":69"/' /etc/default/tftpd-hpa
+
+Set up following in /var/lib/tftpboot/pxelinux.cfg/default:
 
 .. code::
 
@@ -192,18 +186,19 @@ Set up following in /var/lib/tftpboot/butterknife/pxelinux.cfg/default:
         menu label Boot from local harddisk
         localboot 0
 
-    label butterknife-amd64
-        menu label Butterknife (amd64)
-        kernel butterknife-amd64
+    label mbr
+        menu label Boot from first partition
+        kernel chain.c32
+        append hd0 1
 
-    label butterknife-i386
-        menu label Butterknife (i386)
-        kernel butterknife-i386
+    label butterknife-amd64
+        menu label Butterknife
+        linux butterknife-amd64.bin
 
     label deploy-edu-workstation
-        menu label Deploy edu workstation (i386)
-        kernel butterknife-i386
-        append bk_url=https://butterknife.koodur.com/api/ bk_template=com.koodur.butterknife.EduWorkstation quiet
+        menu label Deploy edu workstation
+        linux butterknife-amd64.bin
+        append bk_url=https://butterknife.koodur.com bk_template=com.koodur.butterknife.EduWorkstation quiet
 
     label memtest
         menu label Memtest86+
@@ -221,7 +216,7 @@ in /etc/dhcp/dhcpd.conf and restart the service:
     next-server 192.168.x.x;
     filename "pxelinux.0";
 
-If you have OpenWrt based router simply add following to 
+If you have OpenWrt based router simply add following to
 the **config dnsmasq** section of /etc/config/dhcp and restart
 the service:
 
@@ -235,16 +230,16 @@ and restart the service:
 .. code::
 
     dhcp-boot=pxelinux.0,,192.168.x.x
- 
+
 If you're using MikroTik's WinBox open up your DHCP network configuration and
-set **Next Server** option to 192.168.x.x and **Boot file name** option to 
+set **Next Server** option to 192.168.x.x and **Boot file name** option to
 pxelinux.0:
 
 .. figure:: doc/img/mikrotik-pxe-boot.png
 
 Remember to replace 192.168.x.x with the actual IP address of your TFTP server.
 
- 
+
 Deployment workflow
 -------------------
 
@@ -252,25 +247,25 @@ Butterknife provisioning image provides menu-driven user-interface
 with simple Enter-Enter-Enter usage:
 
 .. figure:: doc/img/butterknife-main-screen.png
-    
+
 We currently support HTTP, multicast and various combinations of both:
-    
+
 .. figure:: doc/img/butterknife-transfer-method.png
 
 Partitioning choices feature also NTFS resize and incremental upgrades:
 
 .. figure:: doc/img/butterknife-partitioning-method.png
-    
+
 Target disk selection:
 
 .. figure:: http://lauri.vosandi.com/cache/c8683a45f56cc88895646b7090b021af.png
-    
+
 Partition selection:
-    
+
 .. figure:: http://lauri.vosandi.com/cache/c348448d183ea384b30bbdd4e590cab4.png
-    
+
 Template versions are actually snapshots:
-    
+
 .. figure:: doc/img/butterknife-select-version.png
 
 These steps should be enough to deploy a Linux-based OS in no time.
