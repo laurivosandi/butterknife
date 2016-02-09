@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link href="//fonts.googleapis.com/css?family=Pacifico" rel="stylesheet" type="text/css">
-    <link href="//fonts.googleapis.com/css?family=PT+Sans+Narrow" rel="stylesheet" type="text/css">
+    <link href="//fonts.googleapis.com/css?family=Muli:400,400italic" rel="stylesheet" type="text/css">
     <meta charset="utf-8"/>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <title>Butterknife server</title>
@@ -38,8 +37,8 @@
         }
 
         h1, h2, th {
-            font-family: 'Pacifico';
-            font-weight: 400;
+            font-family: 'Muli';
+            font-weight: bold;
         }
 
         h1 {
@@ -57,7 +56,7 @@
         }
 
         p, td, footer {
-            font-family: 'PT Sans Narrow';
+            font-family: 'Muli';
             font-size: 14pt;
         }
 
@@ -80,7 +79,7 @@
 
         #container, header h1 {
             margin: 0 auto;
-            width: 720px;
+            max-width: 960px;
         }
 
 
@@ -126,20 +125,22 @@
     </style>
 </head>
 <body>
-    <header>
-        <h1>Butterknife server at {{ request.host }}</h1>
-    </header>
+
+
 
 <div id="container">
+
+    <img src="http://butterknife.rocks/img/butterknife-logo-cropped.svg" style="margin: 0 auto; display:block; "/>
     {% block container %}
 
-    <img style="float:right; max-width: 50%; max-height: 50%; margin-left: 1em;" src="http://www.thestar.com/content/dam/thestar/news/world/2011/12/14/norway_runs_out_of_butter/butter.jpeg"/>
-
     <h2>What is this?</h2>
-    <p>You've stumbled upon <a href="http://github.com/laurivosandi/butterknife/">Butterknife</a>
+    <p>You've stumbled upon <a href="http://butterknife.rocks/">Butterknife</a>
     server instance, some cool kids are hosting Linux-based operating system
     templates here as Btrfs snapshots and you can deploy those
-    templates on your computer.</p>
+    templates on your computer.
+    See <a href="http://butterknife.rocks/">Butterknife project website</a>
+    what this fuss is all about.
+    </p>
 
     <h2>How to use it?</h2>
     <p>
@@ -150,35 +151,29 @@
     <h2>
     <svg height="48" width="48">
         <circle fill="none" stroke-width="3" stroke="black" r="20" cy="24" cx="24"></circle>
-        <text dominant-baseline="middle" text-anchor="middle" y="30" x="24">1a</text>
+        <text dominant-baseline="middle" text-anchor="middle" y="26" x="24">1</text>
     </svg>
-    Provision from memory stick</h2>
+    Provision using memory stick</h2>
 
-    <p>Download <a href="https://www.koodur.com/butterknife/provisioning-image/butterknife-amd64.iso">ISO file</a> and write it on a memory stick
+    <p>Download <a href="http://butterknife.rocks/provision/butterknife-amd64.iso">ISO file</a> and write it on a memory stick
 
-    <pre>wget -c https://www.koodur.com/butterknife/provisioning-image/butterknife-amd64.iso
+    <pre>wget -c http://butterknife.rocks/provision/butterknife-amd64.iso
 sudo dd if=butterknife-amd64.iso of=/dev/sdx</pre>
 
-    <p>Windows users may want to give <a href="https://sourceforge.net/projects/win32diskimager/">Win32 Disk Imager</a> a try.</p>
+    <p>Windows users may want to give <a href="https://sourceforge.net/projects/win32diskimager/">Win32 Disk Imager</a> a try.
+    You can also set up TFTP server for booting via PXE, see GitHub page for more information.
+    If something doesn't work as expected make sure you're using up to date provisioning image.
+    </p>
+
 
     <h2>
     <svg height="48" width="48">
         <circle fill="none" stroke-width="3" stroke="black" r="20" cy="24" cx="24"></circle>
-        <text dominant-baseline="middle" text-anchor="middle" y="30" x="24">1b</text>
-    </svg>
-    Provision via PXE</h2>
-
-    <p>Set up TFTP server to serve Butterknife provisioning image on your LAN segment,
-replicate the directory structure from <a href="https://github.com/laurivosandi/butterknife/tree/master/pxe">GitHub repository</a> to TFTP server root and adjust <i>pxelinux.cfg/default</i>.</p>
-
-    <h2>
-    <svg height="48" width="48">
-        <circle fill="none" stroke-width="3" stroke="black" r="20" cy="24" cx="24"></circle>
-        <text dominant-baseline="middle" text-anchor="middle" y="30" x="24">2</text>
+        <text dominant-baseline="middle" text-anchor="middle" y="26" x="24">2</text>
     </svg>
     Boot the machine</h2>
 
-    <p>Boot the machine either from PXE, memory stick or CD.
+    <p>Boot the machine either from memory stick.
     Refer to your motherboard manual for temporary boot device.
     Note that currently Butterknife supports legacy boot methods only,
     hence make sure you have turned (U)EFI and secure boot off.
@@ -186,7 +181,7 @@ replicate the directory structure from <a href="https://github.com/laurivosandi/
     <h2>
     <svg height="48" width="48">
         <circle fill="none" stroke-width="3" stroke="black" r="20" cy="24" cx="24"></circle>
-        <text dominant-baseline="middle" text-anchor="middle" y="30" x="24">3</text>
+        <text dominant-baseline="middle" text-anchor="middle" y="26" x="24">3</text>
     </svg>
     Follow instructions on the screen
     </h2>
@@ -197,7 +192,7 @@ replicate the directory structure from <a href="https://github.com/laurivosandi/
     Once you've landed at following screen, you're almost done, just
     <a href="https://github.com/laurivosandi/butterknife#deployment-workflow">follow instructions of the screen</a>:</p>
 
-    <img src="https://github.com/laurivosandi/butterknife/raw/master/doc/img/butterknife-main-screen.png"/>
+    <img src="https://github.com/laurivosandi/butterknife/raw/master/doc/img/butterknife-main-screen.png" style="margin: 0 auto; display: block;"/>
 
     <p>Butterknife wipes the harddisk, creates a Btrfs filesystem and downloads the
     snapshot to newly created filesystem by default.
@@ -250,13 +245,14 @@ replicate the directory structure from <a href="https://github.com/laurivosandi/
                 <td>{{subvolume.created}}</td>
                 <td>
                     <a href="/{{subvolume}}" title="Download in .far format, suitable for piping to: btrfs receive">far</a>
-                    | <a href="/{{subvolume}}/?format=tar" title="Download in .tar format, suitable for piping to: tar xvf -">tar</a>
-                    | <a href="/{{subvolume}}/manifest/" title="Download manifest">manifest</a>
+                    <a href="/{{subvolume}}/?format=tar" title="Download in .tar format, suitable for piping to: tar xvf -">tar</a>
+                    <a href="/{{subvolume}}/manifest/" title="Download manifest">mft</a>
                     {% if subvolume.signed %}| <a href="/{{subvolume}}/signature/" title="Download signature">signature</a>{% endif %}
                 </td>
                 <td>
-                    <a href="/{{subvolume}}/packages/">packages</a>
-                    {% if newer_subvolume %}| <a href="/{{newer_subvolume}}/packages/?parent={{subvolume}}">diff</a>{% endif %}
+                    <a href="/{{subvolume}}/packages/">dpkg</a>
+                    {% if newer_subvolume %}
+                    <a href="/{{newer_subvolume}}/packages/?parent={{subvolume}}">diff</a>{% endif %}
                 </td>
             </tr>
             {% set newer_subvolume = subvolume %}
@@ -266,6 +262,6 @@ replicate the directory structure from <a href="https://github.com/laurivosandi/
 </div>
 
 </body>
-<footer><a href="http://github.com/laurivosandi/butterknife">Butterknife</a> by Lauri Võsandi</footer>
+<footer><a href="http://butterknife.rocks/">Butterknife</a> by Lauri Võsandi</footer>
 
 </html>
