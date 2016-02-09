@@ -7,7 +7,7 @@ from datetime import datetime
 from butterknife.fssum import generate_manifest
 from butterknife.subvol import Subvol
 
-BTRFS = "/sbin/btrfs"
+BTRFS = "btrfs"
 MANIFEST_DIR = "/var/lib/butterknife/manifests"
 
 class LocalPool(object):
