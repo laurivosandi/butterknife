@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# RDP session wrapper copy it to /usr/bin and
+# create /usr/share/xsessions/rdp.desktop with following content to use it:
+
+# [Desktop Entry]
+# Name = Remote desktop to blah
+# Type = Application
+# Exec = rdesktop-wrapper blah.com -k et
+
+rdesktop -f -r disk:Terminal=/media -r scard -r sound $@
+
+exitcode=$?
+
+case $exitcode in
+    0) exit ;; # RDP session terminated normally
+    1) msg="Server initiated disconnect";;
+    2) msg="Server initiated logoff";;
+    3) msg="Server idle timeout reached";;
+    4) msg="Server logon timeout reached";;
+    5) msg="The session was replaced";;
+    6) msg="The server is out of memory";;
+    7) msg="The server denied the connection";;
+    8) msg="The server denied the connection for security reason";;
+    12) exit ;; # User aborted login
+    16) msg="Internal licensing error";;
+    17) msg="No license server available";;
+    18) msg="No valid license available";;
+    19) msg="Invalid licensing message";;
+    20) msg="Hardware id doesn't match software license";;
+    21) msg="Client license error";;
+    22) msg="Network error during licensing protocol";;
+    23) msg="Licensing protocol was not completed";;
+    24) msg="Incorrect client license enryption";;
+    25) msg="Can't upgrade license";;
+    26) msg="The server is not licensed to accept remote connections";;
+    62) msg="The local client window was closed";;
+    63) msg="Some other, unknown error occured";;
+    64) msg="Command line usage error";;
+    69) msg="A service or resource (such as memory) is unavailable";;
+    70) msg="An internal software error has been detected";;
+    71) msg="Operating system error";;
+    76) msg="Protocol or license error";;
+    *)  msg="Unknown code"
+esac
+
+zenity --error --text "RDP client exited with code $exitcode: $msg" 
+
